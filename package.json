@@ -1,0 +1,19 @@
+{
+  "name": "sweet-swap",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "size": "npm run build && node scripts/size.mjs"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5",
+    "pixi.js": "^8.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}

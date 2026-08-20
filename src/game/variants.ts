@@ -60,7 +60,7 @@ const CLASSIC_TIMING: Timing = {
   introStagger: 1.2,
   promptHold: 0.8,
   hintDelay: 2.0,
-  assistDelay: 4.0,
+  assistDelay: 8.0,
   wobble: 0.3,
   swapSnap: 0.2,
   clear: 0.45,
@@ -85,13 +85,7 @@ const CLASSIC_TIMING: Timing = {
  */
 export const VARIANT_CLASSIC: Variant = {
   id: 'classic',
-  seed: [
-    2, 4, 3, 3, 4,
-    1, 4, 2, 4, 1,
-    3, 3, 2, 3, 2,
-    2, 0, 1, 4, 0,
-    4, 3, 0, 3, 0,
-  ],
+  seed: [2, 4, 3, 3, 4, 1, 4, 2, 4, 1, 3, 3, 2, 3, 2, 2, 0, 1, 4, 0, 4, 3, 0, 3, 0],
   refills: [
     // Step 0 is null on purpose: the cascade has to come from falling tiles alone, so
     // the holes stay open until the combo has played.

@@ -146,56 +146,32 @@ export async function playSwap(
   viewB: TileView,
   destA: { x: number; y: number },
   destB: { x: number; y: number },
-  wobble: number,
-  snap: number,
+  duration: number,
 ): Promise<void> {
   lift(viewA);
   lift(viewB);
-
-  const startA = { x: viewA.root.x, y: viewA.root.y };
-  const startB = { x: viewB.root.x, y: viewB.root.y };
-  const midA = lerpPoint(startA, destA, 0.6);
-  const midB = lerpPoint(startB, destB, 0.6);
-
-  await Promise.all([
-    animateTo(viewA.root, { x: midA.x, y: midA.y, duration: snap * 0.7, ease: 'power2.out' }),
-    animateTo(viewB.root, { x: midB.x, y: midB.y, duration: snap * 0.7, ease: 'power2.out' }),
-  ]);
-
-  const amp = 0.07;
-  await Promise.all([
-    animateTo(viewA.root, { rotation: amp, duration: wobble / 4, yoyo: true, repeat: 3, ease: 'sine.inOut' }),
-    animateTo(viewB.root, { rotation: -amp, duration: wobble / 4, yoyo: true, repeat: 3, ease: 'sine.inOut' }),
-  ]);
-
   viewA.root.rotation = 0;
   viewB.root.rotation = 0;
 
   await Promise.all([
-    animateTo(viewA.root, { x: destA.x, y: destA.y, duration: snap, ease: 'power2.in' }),
-    animateTo(viewB.root, { x: destB.x, y: destB.y, duration: snap, ease: 'power2.in' }),
+    animateTo(viewA.root, { x: destA.x, y: destA.y, duration, ease: 'power2.inOut' }),
+    animateTo(viewB.root, { x: destB.x, y: destB.y, duration, ease: 'power2.inOut' }),
   ]);
 }
 
-export async function playWrongSwap(viewA: TileView, viewB: TileView): Promise<void> {
-  lift(viewA);
-  lift(viewB);
-
+export async function playWrongSwap(
+  viewA: TileView,
+  viewB: TileView,
+  destA: { x: number; y: number },
+  destB: { x: number; y: number },
+  duration: number,
+): Promise<void> {
   const startA = { x: viewA.root.x, y: viewA.root.y };
   const startB = { x: viewB.root.x, y: viewB.root.y };
-  const bumpA = lerpPoint(startA, startB, 0.28);
-  const bumpB = lerpPoint(startB, startA, 0.28);
-  const shake = 0.12;
 
-  await Promise.all([
-    animateTo(viewA.root, { x: bumpA.x, y: bumpA.y, rotation: shake, duration: 0.15, ease: 'power2.out' }),
-    animateTo(viewB.root, { x: bumpB.x, y: bumpB.y, rotation: -shake, duration: 0.15, ease: 'power2.out' }),
-  ]);
-
-  await Promise.all([
-    animateTo(viewA.root, { x: startA.x, y: startA.y, rotation: 0, duration: 0.15, ease: 'power2.in' }),
-    animateTo(viewB.root, { x: startB.x, y: startB.y, rotation: 0, duration: 0.15, ease: 'power2.in' }),
-  ]);
+  await playSwap(viewA, viewB, destA, destB, duration);
+  await waitFor(0.12);
+  await playSwap(viewA, viewB, startA, startB, duration);
 }
 
 export async function playClearPop(view: TileView, duration: number): Promise<void> {
@@ -383,14 +359,6 @@ function heartPoints(r: number): number[] {
     pts.push(x, y);
   }
   return pts;
-}
-
-function lerpPoint(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-  t: number,
-): { x: number; y: number } {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 function lift(view: TileView): void {

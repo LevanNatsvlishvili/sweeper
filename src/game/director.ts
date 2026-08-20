@@ -155,7 +155,9 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     stopIdle();
     const viewA = viewAt(swap.a);
     const viewB = viewAt(swap.b);
-    if (viewA && viewB) await playWrongSwap(viewA, viewB);
+    if (viewA && viewB) {
+      await playWrongSwap(viewA, viewB, cellCenterAt(swap.b), cellCenterAt(swap.a), variant.timing.swapSnap);
+    }
     hintStronger = true;
     enterAwaitInput();
   }
@@ -186,7 +188,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
         const viewA = viewAt(step.a);
         const viewB = viewAt(step.b);
         if (!viewA || !viewB) return;
-        await playSwap(viewA, viewB, cellCenterAt(step.b), cellCenterAt(step.a), timing.wobble, timing.swapSnap);
+        await playSwap(viewA, viewB, cellCenterAt(step.b), cellCenterAt(step.a), timing.swapSnap);
         return;
       }
       case 'match': {

@@ -33,7 +33,7 @@ export async function createApp(): Promise<AppContext> {
 
   await app.init({
     resizeTo: window,
-    background: 0x0a0a12,
+    background: 0x140e0c,
     backgroundAlpha: 1,
     antialias: window.matchMedia('(pointer: fine)').matches,
     resolution: Math.min(window.devicePixelRatio || 1, MAX_RESOLUTION),
@@ -58,6 +58,7 @@ export async function createApp(): Promise<AppContext> {
   const root = new Container();
   root.addChild(world, layers.ui, layers.debug);
   app.stage.addChild(root);
+  app.ticker.maxFPS = 60;
 
   return { app, root, world, layers };
 }

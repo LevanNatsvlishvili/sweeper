@@ -11,6 +11,7 @@ import {
   type RefillStep,
   type Spawn,
   type Special,
+  type Step,
   type Swap,
   type Tile,
   type TypeId,
@@ -164,6 +165,37 @@ export function expandSpecials(board: Board, cleared: readonly GridIndex[]): Gri
   }
 
   return [...expanded].sort((a, b) => a - b);
+}
+
+/** Places refill tiles using the ids resolve() already assigned, so the view map stays in sync. */
+export function placeSpawns(board: Board, spawns: readonly Spawn[]): void {
+  for (const spawn of spawns) {
+    board.cells[spawn.to] = { id: spawn.tileId, type: spawn.type, special: 'none' };
+    if (spawn.tileId >= board.nextTileId) board.nextTileId = spawn.tileId + 1;
+  }
+}
+
+/**
+ * Replays one resolve() step onto a live board. The director animates the step first,
+ * then calls this so gameplay state only mutates at step boundaries.
+ */
+export function applyStep(board: Board, step: Step): void {
+  switch (step.kind) {
+    case 'swap':
+      applySwap(board, { a: step.a, b: step.b });
+      break;
+    case 'match':
+      clearCells(board, step.cleared);
+      break;
+    case 'gravity':
+      applyGravity(board);
+      break;
+    case 'refill':
+      placeSpawns(board, step.spawns);
+      break;
+    case 'settle':
+      break;
+  }
 }
 
 /** Debug/test helper: the board's type layout as a plain 25-entry array. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createBoard, typeLayout } from './board';
+import { applyStep, createBoard, typeLayout } from './board';
 import { findMatches } from './matcher';
 import { assertSeed, resolve, verifySeed } from './resolve';
 import { indexOf, type Step, type TypeId } from './types';
@@ -133,5 +133,15 @@ describe('resolve — the rigged classic chain', () => {
     };
 
     expect(run()).toEqual(run());
+  });
+
+  it('replays onto a live board through applyStep at each boundary', () => {
+    const planned = createBoard(VARIANT_CLASSIC.seed, VARIANT_CLASSIC.specials);
+    const steps = resolve(planned, RIGGED_SWAP, VARIANT_CLASSIC);
+
+    const live = createBoard(VARIANT_CLASSIC.seed, VARIANT_CLASSIC.specials);
+    for (const step of steps) applyStep(live, step);
+
+    expect(typeLayout(live)).toEqual(typeLayout(planned));
   });
 });

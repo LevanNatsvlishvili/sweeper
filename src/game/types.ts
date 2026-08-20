@@ -87,3 +87,16 @@ export function rowOf(index: GridIndex): number {
 export function colOf(index: GridIndex): number {
   return index % GRID_SIZE;
 }
+
+export type Cardinal = 'left' | 'right' | 'up' | 'down';
+
+export function areAdjacent(a: GridIndex, b: GridIndex): boolean {
+  return Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b)) === 1;
+}
+
+export function neighborOf(index: GridIndex, dir: Cardinal): GridIndex | null {
+  const row = rowOf(index) + (dir === 'up' ? -1 : dir === 'down' ? 1 : 0);
+  const col = colOf(index) + (dir === 'left' ? -1 : dir === 'right' ? 1 : 0);
+  if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
+  return indexOf(row, col);
+}

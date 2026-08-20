@@ -1,53 +1,89 @@
-// Touch swipe and tap-half input handling.
+// Tile drag-swipe (cardinal) with tap-select fallback. Game rules live in the director.
 
-export type Direction = 'left' | 'right';
+import type { Container, FederatedPointerEvent } from 'pixi.js';
 
-const SWIPE_THRESHOLD_PX = 40;
-const SWIPE_HORIZONTAL_BIAS = 1.5;
+import { CELL_SIZE, hitCell } from '../game/tiles';
+import { neighborOf, type Cardinal, type GridIndex } from '../game/types';
 
-/**
- * Interprets raw pointer gestures only — swipe vs. tap-half — and reports a
- * direction. Game-rule interpretation (what a direction means, whether it's
- * honored) belongs to the caller, not here.
- */
-export function setupInput(el: HTMLElement, onDirection: (dir: Direction) => void): () => void {
+const DRAG_THRESHOLD = 0.3;
+
+export interface TileInputHandlers {
+  isEnabled: () => boolean;
+  onSwipe: (from: GridIndex, to: GridIndex) => void;
+  onTap: (index: GridIndex) => void;
+}
+
+export function setupTileInput(layer: Container, handlers: TileInputHandlers): () => void {
   let startX = 0;
   let startY = 0;
+  let startCell: GridIndex | null = null;
   let tracking = false;
+  let swiped = false;
 
-  function onPointerDown(e: PointerEvent): void {
-    startX = e.clientX;
-    startY = e.clientY;
-    tracking = true;
+  function localPoint(e: FederatedPointerEvent): { x: number; y: number } {
+    return layer.toLocal(e.global);
   }
 
-  function onPointerUp(e: PointerEvent): void {
-    if (!tracking) return;
-    tracking = false;
+  function onPointerDown(e: FederatedPointerEvent): void {
+    if (!handlers.isEnabled()) return;
+    const local = localPoint(e);
+    startCell = hitCell(local.x, local.y);
+    if (startCell === null) return;
+    startX = local.x;
+    startY = local.y;
+    tracking = true;
+    swiped = false;
+  }
 
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    if (Math.abs(dx) > SWIPE_THRESHOLD_PX && Math.abs(dx) > Math.abs(dy) * SWIPE_HORIZONTAL_BIAS) {
-      onDirection(dx > 0 ? 'right' : 'left');
+  function onPointerMove(e: FederatedPointerEvent): void {
+    if (!tracking || startCell === null || swiped) return;
+    if (!handlers.isEnabled()) {
+      tracking = false;
       return;
     }
 
-    // Tap fallback: classify by which half of the screen it landed in.
-    onDirection(e.clientX < window.innerWidth / 2 ? 'left' : 'right');
+    const local = localPoint(e);
+    const dx = local.x - startX;
+    const dy = local.y - startY;
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD * CELL_SIZE) return;
+
+    const dir: Cardinal = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+    const to = neighborOf(startCell, dir);
+    swiped = true;
+    tracking = false;
+
+    if (to !== null) handlers.onSwipe(startCell, to);
   }
 
-  function onPointerCancel(): void {
+  function onPointerUp(e: FederatedPointerEvent): void {
+    if (!tracking || startCell === null) {
+      tracking = false;
+      return;
+    }
+    tracking = false;
+    if (swiped || !handlers.isEnabled()) return;
+
+    const local = localPoint(e);
+    const end = hitCell(local.x, local.y);
+    if (end === startCell) handlers.onTap(startCell);
+  }
+
+  function onCancel(): void {
     tracking = false;
   }
 
-  el.addEventListener('pointerdown', onPointerDown);
-  el.addEventListener('pointerup', onPointerUp);
-  el.addEventListener('pointercancel', onPointerCancel);
+  layer.eventMode = 'static';
+  layer.on('pointerdown', onPointerDown);
+  layer.on('pointermove', onPointerMove);
+  layer.on('pointerup', onPointerUp);
+  layer.on('pointerupoutside', onCancel);
+  layer.on('pointercancel', onCancel);
 
   return () => {
-    el.removeEventListener('pointerdown', onPointerDown);
-    el.removeEventListener('pointerup', onPointerUp);
-    el.removeEventListener('pointercancel', onPointerCancel);
+    layer.off('pointerdown', onPointerDown);
+    layer.off('pointermove', onPointerMove);
+    layer.off('pointerup', onPointerUp);
+    layer.off('pointerupoutside', onCancel);
+    layer.off('pointercancel', onCancel);
   };
 }

@@ -1,6 +1,7 @@
 import { createApp } from './core/app';
 import { setupMraid } from './core/mraid';
 import { setupResize } from './core/resize';
+import { createDirector } from './game/director';
 import { assertSeed } from './game/resolve';
 import { selectVariant } from './game/variants';
 
@@ -20,7 +21,12 @@ async function main(): Promise<void> {
 
   await mraid.whenViewable();
 
+  const director = createDirector(ctx, variant, mraid);
+  ctx.app.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  await director.start();
+
   window.addEventListener('beforeunload', () => {
+    director.dispose();
     disposeResize();
     mraid.dispose();
   });

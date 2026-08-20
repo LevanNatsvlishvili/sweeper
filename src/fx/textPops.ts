@@ -3,7 +3,7 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 
 import { DESIGN_WIDTH } from '../core/resize';
-import { animateTo, BOARD_ORIGIN_Y, GRID_PIXEL, waitFor } from '../game/tiles';
+import { animateTo, BOARD_ORIGIN_Y, GRID_PIXEL_H, waitFor } from '../game/tiles';
 import type { ComboBeat } from '../game/variants';
 
 export interface TextPops {
@@ -57,11 +57,11 @@ export function createTextPops(parent: Container): TextPops {
 
   return {
     combo: (beat) => {
-      comboText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL / 2);
+      comboText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL_H / 2);
       return pop(comboText, beat.text, beat.tint, beat.scale, 0.35);
     },
     complete: (text) => {
-      completeText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL / 2);
+      completeText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL_H / 2);
       return pop(completeText, text, 0xffffff, 1, 0.8);
     },
     prompt: async (text, hold) => {

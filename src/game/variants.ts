@@ -41,7 +41,7 @@ export interface SeedExpectation {
 
 export interface Variant {
   readonly id: 'classic' | 'cascade';
-  /** 25 entries, row-major, row 0 at the top. */
+  /** CELL_COUNT entries, row-major, row 0 at the top. */
   readonly seed: readonly TypeId[];
   readonly specials?: Readonly<Record<GridIndex, Special>>;
   /** One entry per resolution step. An all-empty step means "no refill yet". */
@@ -72,26 +72,44 @@ const CLASSIC_TIMING: Timing = {
 };
 
 /**
- * Found by scripts/find-seed.mjs and locked in. The full chain:
+ * Found by scripts/find-seed.mjs and locked in. The full chain on the 10x5 board:
  *
- *   2 4 3 3 4     swap r2c2 <-> r2c3 (dead centre) makes row 2 read 3 3 3 2 2
- *   1 4 2 4 1     match 1: r2c0..r2c2 type 3
- *   3 3 2 3 2     clear + gravity drops tiles back into row 2 as 2 2 2
- *   2 0 1 4 0     match 2: r2c2..r2c4 type 2  -> "SWEET! x2"
- *   4 3 0 3 0     clear + gravity leaves 6 holes, refill settles them to zero matches
+ *   r0  4 2 4 3 3
+ *   r1  1 1 4 4 2
+ *   r2  3 3 0 2 2
+ *   r3  2 2 0 0 4    swap r5c1 <-> r5c2 makes row 5 read 4 4 1 1 1
+ *   r4  2 1 4 3 3    match 1: r5c2..r5c4 type 1
+ *   r5  4 1 4 1 1 <- clear + gravity drops row 5 to 4 4 4 3 3
+ *   r6  4 2 2 1 4    match 2: r5c0..r5c2 type 4  -> "SWEET! x2"
+ *   r7  0 0 3 3 2    clear + gravity leaves 6 holes, refill settles to zero matches
+ *   r8  1 4 3 0 0
+ *   r9  3 4 1 0 1
  *
- * It is the ONLY swap of the 40 adjacent pairs that matches anything. Don't hand-edit
+ * The two matches between them touch all five columns, so every column shows a fall.
+ * This is the ONLY swap of the 85 adjacent pairs that matches anything. Don't hand-edit
  * a cell here — re-run the search tool, because every downstream step depends on it.
  */
 export const VARIANT_CLASSIC: Variant = {
   id: 'classic',
-  seed: [2, 4, 3, 3, 4, 1, 4, 2, 4, 1, 3, 3, 2, 3, 2, 2, 0, 1, 4, 0, 4, 3, 0, 3, 0],
+  // prettier-ignore
+  seed: [
+    4, 2, 4, 3, 3,
+    1, 1, 4, 4, 2,
+    3, 3, 0, 2, 2,
+    2, 2, 0, 0, 4,
+    2, 1, 4, 3, 3,
+    4, 1, 4, 1, 1,
+    4, 2, 2, 1, 4,
+    0, 0, 3, 3, 2,
+    1, 4, 3, 0, 0,
+    3, 4, 1, 0, 1,
+  ],
   refills: [
     // Step 0 is null on purpose: the cascade has to come from falling tiles alone, so
     // the holes stay open until the combo has played.
     null,
     // Step 1, per column, bottom-first. Column 2 has two holes (r1c2 then r0c2).
-    [[4], [1], [3, 2], [0], [0]],
+    [[1], [4], [2, 2], [2], [1]],
   ],
   combos: [
     { text: 'SWEET!', scale: 1.0, tint: 0xffd166 },

@@ -6,7 +6,8 @@ import { Container, Graphics, Rectangle, Text, TextStyle } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../core/resize';
 import { findValidSwaps } from './matcher';
 import {
-  GRID_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
   colOf,
   indexOf,
   rowOf,
@@ -17,13 +18,35 @@ import {
 } from './types';
 import type { Board } from './board';
 
-export const CELL_SIZE = 112;
-export const TILE_RADIUS = 42;
-export const GRID_PIXEL = GRID_SIZE * CELL_SIZE;
-export const BOARD_ORIGIN_X = (DESIGN_WIDTH - GRID_PIXEL) / 2;
-export const BOARD_ORIGIN_Y = (DESIGN_HEIGHT - GRID_PIXEL) / 2 - 36;
+/**
+ * The board is twice as tall as it is wide, so in portrait the height runs out first.
+ * Size the cell off whichever axis binds, keeping a band clear at the top for the
+ * prompt line and at the bottom for the CTA slide-up.
+ */
+const BOARD_MARGIN_X = 40;
+const BOARD_RESERVE_TOP = 120;
+/**
+ * Must clear the raised CTA panel, which parks at DESIGN_HEIGHT - PANEL_HEIGHT - 36.
+ * Keep in step with PANEL_HEIGHT in ui/cta.ts: 168 panel + 36 margin + 14 gap + 22 well pad.
+ */
+const BOARD_RESERVE_BOTTOM = 240;
+const BOARD_BAND = DESIGN_HEIGHT - BOARD_RESERVE_TOP - BOARD_RESERVE_BOTTOM;
 
-export const BOARD_HIT_AREA = new Rectangle(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, GRID_PIXEL, GRID_PIXEL);
+export const CELL_SIZE = Math.floor(
+  Math.min((DESIGN_WIDTH - BOARD_MARGIN_X * 2) / GRID_COLS, BOARD_BAND / GRID_ROWS),
+);
+export const TILE_RADIUS = Math.round(CELL_SIZE * 0.375);
+export const GRID_PIXEL_W = GRID_COLS * CELL_SIZE;
+export const GRID_PIXEL_H = GRID_ROWS * CELL_SIZE;
+export const BOARD_ORIGIN_X = (DESIGN_WIDTH - GRID_PIXEL_W) / 2;
+export const BOARD_ORIGIN_Y = BOARD_RESERVE_TOP + (BOARD_BAND - GRID_PIXEL_H) / 2;
+
+export const BOARD_HIT_AREA = new Rectangle(
+  BOARD_ORIGIN_X,
+  BOARD_ORIGIN_Y,
+  GRID_PIXEL_W,
+  GRID_PIXEL_H,
+);
 
 export type CandyShape = 'circle' | 'square' | 'diamond' | 'heart' | 'triangle';
 
@@ -60,7 +83,7 @@ export function cellCenterAt(index: GridIndex): { x: number; y: number } {
 export function hitCell(localX: number, localY: number): GridIndex | null {
   const col = Math.floor((localX - BOARD_ORIGIN_X) / CELL_SIZE);
   const row = Math.floor((localY - BOARD_ORIGIN_Y) / CELL_SIZE);
-  if (row < 0 || col < 0 || row >= GRID_SIZE || col >= GRID_SIZE) return null;
+  if (row < 0 || col < 0 || row >= GRID_ROWS || col >= GRID_COLS) return null;
   return indexOf(row, col);
 }
 
@@ -88,8 +111,8 @@ export function drawBoardBackdrop(parent: Container): void {
     .roundRect(
       BOARD_ORIGIN_X - pad,
       BOARD_ORIGIN_Y - pad,
-      GRID_PIXEL + pad * 2,
-      GRID_PIXEL + pad * 2,
+      GRID_PIXEL_W + pad * 2,
+      GRID_PIXEL_H + pad * 2,
       28,
     )
     .fill({ color: 0x1c1410 })
@@ -98,8 +121,8 @@ export function drawBoardBackdrop(parent: Container): void {
   parent.addChild(well);
 
   const slots = new Graphics();
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
       const { x, y } = cellCenter(row, col);
       slots.circle(x, y, TILE_RADIUS + 6).fill({ color: 0x0c0908, alpha: 0.55 });
     }
@@ -262,7 +285,7 @@ export function createDebugOverlay(parent: Container, getBoard: () => Board): {
       style: swapStyle,
     });
     summary.anchor.set(0.5, 0);
-    summary.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL + 18);
+    summary.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL_H + 18);
     root.addChild(summary);
   }
 

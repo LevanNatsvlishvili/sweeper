@@ -1,6 +1,6 @@
 // Pure functions: findMatches and findValidSwaps (no Pixi imports).
 
-import { GRID_SIZE, indexOf, type Cell, type GridIndex, type Run, type Swap } from './types';
+import { GRID_COLS, GRID_ROWS, indexOf, type Cell, type GridIndex, type Run, type Swap } from './types';
 
 const MIN_RUN = 3;
 
@@ -18,9 +18,13 @@ export function findMatches(cells: readonly Cell[]): Run[] {
 }
 
 function scanLines(cells: readonly Cell[], dir: 'row' | 'col', out: Run[]): void {
-  for (let line = 0; line < GRID_SIZE; line++) {
+  // The grid is taller than it is wide, so rows and columns differ in both count and length.
+  const lineCount = dir === 'row' ? GRID_ROWS : GRID_COLS;
+  const lineLength = dir === 'row' ? GRID_COLS : GRID_ROWS;
+
+  for (let line = 0; line < lineCount; line++) {
     let start = 0;
-    while (start < GRID_SIZE) {
+    while (start < lineLength) {
       const tile = cells[cellAt(dir, line, start)];
       if (!tile) {
         start++;
@@ -28,7 +32,7 @@ function scanLines(cells: readonly Cell[], dir: 'row' | 'col', out: Run[]): void
       }
 
       let end = start;
-      while (end + 1 < GRID_SIZE) {
+      while (end + 1 < lineLength) {
         const next = cells[cellAt(dir, line, end + 1)];
         if (!next || next.type !== tile.type) break;
         end++;
@@ -58,13 +62,13 @@ export function clearedIndices(runs: readonly Run[]): GridIndex[] {
   return [...unique].sort((a, b) => a - b);
 }
 
-/** Every orthogonally adjacent pair on the grid — 40 of them on a 5x5. */
+/** Every orthogonally adjacent pair on the grid — 85 of them on a 10x5. */
 const ADJACENT_PAIRS: readonly Swap[] = (() => {
   const pairs: Swap[] = [];
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      if (col + 1 < GRID_SIZE) pairs.push({ a: indexOf(row, col), b: indexOf(row, col + 1) });
-      if (row + 1 < GRID_SIZE) pairs.push({ a: indexOf(row, col), b: indexOf(row + 1, col) });
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      if (col + 1 < GRID_COLS) pairs.push({ a: indexOf(row, col), b: indexOf(row, col + 1) });
+      if (row + 1 < GRID_ROWS) pairs.push({ a: indexOf(row, col), b: indexOf(row + 1, col) });
     }
   }
   return pairs;

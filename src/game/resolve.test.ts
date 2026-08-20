@@ -3,10 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { applyStep, createBoard, typeLayout } from './board';
 import { findMatches } from './matcher';
 import { assertSeed, resolve, verifySeed } from './resolve';
-import { indexOf, type Step, type TypeId } from './types';
+import { CELL_COUNT, GRID_COLS, indexOf, type Step, type TypeId } from './types';
 import { VARIANT_CLASSIC, type Variant } from './variants';
 
-const RIGGED_SWAP = { a: indexOf(2, 2), b: indexOf(2, 3) };
+const RIGGED_SWAP = { a: indexOf(5, 1), b: indexOf(5, 2) };
+const TYPES: readonly TypeId[] = [0, 1, 2, 3, 4];
+
+/** The classic variant with one seed cell overwritten — used to prove verifySeed bites. */
+const tamper = (at: number, type: TypeId): Variant => ({
+  ...VARIANT_CLASSIC,
+  seed: VARIANT_CLASSIC.seed.map((held, index) => (index === at ? type : held)) as TypeId[],
+});
 
 const kinds = (steps: readonly Step[]) => steps.map((step) => step.kind);
 const matchSteps = (steps: readonly Step[]) =>
@@ -21,22 +28,45 @@ describe('verifySeed(VARIANT_CLASSIC)', () => {
     expect(report.swap).toEqual(RIGGED_SWAP);
   });
 
-  it('has teeth — a single altered seed cell fails it', () => {
-    const tampered: Variant = {
-      ...VARIANT_CLASSIC,
-      seed: VARIANT_CLASSIC.seed.map((type, index) => (index === 0 ? 3 : type)) as TypeId[],
-    };
-
-    const report = verifySeed(tampered);
+  it('has teeth — altering the swap row fails it', () => {
+    const report = verifySeed(tamper(indexOf(5, 2), 0));
 
     expect(report.ok).toBe(false);
     expect(report.problems.length).toBeGreaterThan(0);
   });
 
+  it('treats every cell of the swap row as load-bearing', () => {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const index = indexOf(5, col);
+      for (const type of TYPES) {
+        if (type === VARIANT_CLASSIC.seed[index]) continue;
+        expect(verifySeed(tamper(index, type)).ok, `r5c${col} -> ${type}`).toBe(false);
+      }
+    }
+  });
+
+  it('is a knife-edge overall — most single-cell tampers break the chain', () => {
+    let broken = 0;
+    let total = 0;
+
+    for (let index = 0; index < CELL_COUNT; index++) {
+      for (const type of TYPES) {
+        if (type === VARIANT_CLASSIC.seed[index]) continue;
+        total++;
+        if (!verifySeed(tamper(index, type)).ok) broken++;
+      }
+    }
+
+    // Not every edit matters: rows below the match never move or match, so their exact
+    // values are free as long as they make no run of their own. The rig itself is not.
+    expect(total).toBe(CELL_COUNT * (TYPES.length - 1));
+    expect(broken / total).toBeGreaterThan(0.6);
+  });
+
   it('rejects a refill script that is one tile short', () => {
     const starved: Variant = {
       ...VARIANT_CLASSIC,
-      refills: [VARIANT_CLASSIC.refills[0], [[4], [1], [3], [0], [0]]],
+      refills: [VARIANT_CLASSIC.refills[0], [[1], [4], [2], [2], [1]]],
     };
 
     const report = verifySeed(starved);
@@ -76,14 +106,14 @@ describe('resolve — the rigged classic chain', () => {
     ]);
   });
 
-  it('clears exactly three tiles in the middle row on the swap', () => {
+  it('clears exactly three tiles on the swap', () => {
     const board = createBoard(VARIANT_CLASSIC.seed, VARIANT_CLASSIC.specials);
     const [first] = matchSteps(resolve(board, RIGGED_SWAP, VARIANT_CLASSIC));
 
     expect(first.comboLevel).toBe(0);
     expect(first.runs).toHaveLength(1);
-    expect(first.runs[0]).toMatchObject({ dir: 'row', type: 3 });
-    expect(first.cleared).toEqual([indexOf(2, 0), indexOf(2, 1), indexOf(2, 2)]);
+    expect(first.runs[0]).toMatchObject({ dir: 'row', type: 1 });
+    expect(first.cleared).toEqual([indexOf(5, 2), indexOf(5, 3), indexOf(5, 4)]);
   });
 
   it('drops falling tiles into exactly one engineered follow-up match', () => {
@@ -92,8 +122,20 @@ describe('resolve — the rigged classic chain', () => {
 
     expect(second.comboLevel).toBe(1);
     expect(second.runs).toHaveLength(1);
-    expect(second.runs[0]).toMatchObject({ dir: 'row', type: 2 });
-    expect(second.cleared).toEqual([indexOf(2, 2), indexOf(2, 3), indexOf(2, 4)]);
+    expect(second.runs[0]).toMatchObject({ dir: 'row', type: 4 });
+    expect(second.cleared).toEqual([indexOf(5, 0), indexOf(5, 1), indexOf(5, 2)]);
+  });
+
+  it('spreads the two matches across all five columns', () => {
+    const board = createBoard(VARIANT_CLASSIC.seed, VARIANT_CLASSIC.specials);
+    const touched = new Set(
+      matchSteps(resolve(board, RIGGED_SWAP, VARIANT_CLASSIC)).flatMap((step) =>
+        step.cleared.map((index) => index % 5),
+      ),
+    );
+
+    // Every column shows a fall, which is what makes the cascade read on a tall board.
+    expect([...touched].sort()).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('refills once, after the cascade, filling all six accumulated holes', () => {
@@ -117,11 +159,16 @@ describe('resolve — the rigged classic chain', () => {
 
     // prettier-ignore
     expect(typeLayout(board)).toEqual([
-      4, 1, 2, 0, 0,
-      2, 4, 3, 3, 4,
-      1, 4, 3, 4, 1,
-      2, 0, 1, 4, 0,
-      4, 3, 0, 3, 0,
+      1, 4, 2, 2, 1,
+      4, 2, 2, 3, 3,
+      1, 1, 4, 4, 2,
+      3, 3, 4, 2, 2,
+      2, 2, 0, 0, 4,
+      2, 1, 0, 3, 3,
+      4, 2, 2, 1, 4,
+      0, 0, 3, 3, 2,
+      1, 4, 3, 0, 0,
+      3, 4, 1, 0, 1,
     ]);
     expect(findMatches(board.cells)).toEqual([]);
   });

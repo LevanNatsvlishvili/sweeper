@@ -5,27 +5,35 @@
 // resolve.test.ts asserts the checked-in constant. If the two implementations ever
 // disagree, that test fails — which is exactly the cross-check we want.
 //
+// Random sampling is hopeless on a 10x5: only ~0.001% of match-free boards have exactly
+// one valid swap, before the cascade condition is even considered. So this anneals
+// towards a cost function that scores the whole chain at once, which lands a solution in
+// a few hundred evaluations instead of a few billion samples.
+//
 //   node scripts/find-seed.mjs                        search for a classic seed
-//   node scripts/find-seed.mjs --samples=8000000      search harder
-//   node scripts/find-seed.mjs --verify=2,4,3,3,4,... re-validate a specific seed
+//   node scripts/find-seed.mjs --candidates=500       widen the pool before ranking
+//   node scripts/find-seed.mjs --verify=4,2,4,3,3,... re-validate a specific seed
 
-const N = 5;
+const ROWS = 10;
+const COLS = 5;
 const TYPES = 5;
-const CELLS = N * N;
+const CELLS = ROWS * COLS;
 
-const at = (row, col) => row * N + col;
-const rowOf = (i) => Math.floor(i / N);
-const colOf = (i) => i % N;
+const at = (row, col) => row * COLS + col;
+const rowOf = (i) => Math.floor(i / COLS);
+const colOf = (i) => i % COLS;
 
 function findRuns(cells) {
   const runs = [];
 
   for (const dir of ['row', 'col']) {
+    const lineCount = dir === 'row' ? ROWS : COLS;
+    const lineLength = dir === 'row' ? COLS : ROWS;
     const index = dir === 'row' ? at : (line, offset) => at(offset, line);
 
-    for (let line = 0; line < N; line++) {
+    for (let line = 0; line < lineCount; line++) {
       let start = 0;
-      while (start < N) {
+      while (start < lineLength) {
         const type = cells[index(line, start)];
         if (type === null) {
           start++;
@@ -33,7 +41,7 @@ function findRuns(cells) {
         }
 
         let end = start;
-        while (end + 1 < N && cells[index(line, end + 1)] === type) end++;
+        while (end + 1 < lineLength && cells[index(line, end + 1)] === type) end++;
 
         if (end - start + 1 >= 3) {
           const run = [];
@@ -51,10 +59,10 @@ function findRuns(cells) {
 
 const ADJACENT = (() => {
   const pairs = [];
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
-      if (col + 1 < N) pairs.push([at(row, col), at(row, col + 1)]);
-      if (row + 1 < N) pairs.push([at(row, col), at(row + 1, col)]);
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      if (col + 1 < COLS) pairs.push([at(row, col), at(row, col + 1)]);
+      if (row + 1 < ROWS) pairs.push([at(row, col), at(row + 1, col)]);
     }
   }
   return pairs;
@@ -65,6 +73,7 @@ function validSwaps(cells) {
   const scratch = cells.slice();
 
   for (const [a, b] of ADJACENT) {
+    if (scratch[a] === null || scratch[b] === null) continue;
     [scratch[a], scratch[b]] = [scratch[b], scratch[a]];
     const runs = findRuns(scratch);
     if (runs.length) found.push({ a, b, runs });
@@ -77,14 +86,14 @@ function validSwaps(cells) {
 function gravity(cells) {
   const next = cells.slice();
 
-  for (let col = 0; col < N; col++) {
+  for (let col = 0; col < COLS; col++) {
     const stack = [];
-    for (let row = 0; row < N; row++) {
+    for (let row = 0; row < ROWS; row++) {
       const type = next[at(row, col)];
       if (type !== null) stack.push(type);
     }
 
-    let write = N - 1;
+    let write = ROWS - 1;
     for (let k = stack.length - 1; k >= 0; k--) next[at(write--, col)] = stack[k];
     for (let row = write; row >= 0; row--) next[at(row, col)] = null;
   }
@@ -93,9 +102,71 @@ function gravity(cells) {
 }
 
 /**
- * The full Classic contract: exactly one valid swap, one match of three, then exactly
- * one follow-up match of three from falling tiles alone, then a clean board.
+ * Distance from a valid seed, as one number the annealer can descend. Zero means the
+ * board satisfies the whole Classic contract: no opening match, exactly one valid swap,
+ * one match of three, one follow-up match of three from falling tiles alone, then clean.
  */
+function cost(seed) {
+  const opening = findRuns(seed);
+  if (opening.length) return 1000 + opening.length * 50;
+
+  const swaps = validSwaps(seed);
+  let penalty = Math.abs(swaps.length - 1) * 20;
+  if (swaps.length !== 1) return penalty + 200;
+
+  const swap = swaps[0];
+  let cells = seed.slice();
+  [cells[swap.a], cells[swap.b]] = [cells[swap.b], cells[swap.a]];
+
+  const first = findRuns(cells);
+  penalty += Math.abs(first.length - 1) * 15;
+  const firstCleared = new Set(first.flatMap((run) => run.cells));
+  penalty += Math.abs(firstCleared.size - 3) * 10;
+
+  for (const i of firstCleared) cells[i] = null;
+  cells = gravity(cells);
+
+  const second = findRuns(cells);
+  penalty += Math.abs(second.length - 1) * 15;
+  if (second.length === 0) return penalty + 60;
+
+  const secondCleared = new Set(second.flatMap((run) => run.cells));
+  penalty += Math.abs(secondCleared.size - 3) * 10;
+
+  for (const i of secondCleared) cells[i] = null;
+  cells = gravity(cells);
+
+  return penalty + findRuns(cells).length * 25;
+}
+
+function anneal(steps = 60000) {
+  const current = Array.from({ length: CELLS }, () => Math.floor(Math.random() * TYPES));
+  let score = cost(current);
+
+  for (let step = 0; step < steps && score > 0; step++) {
+    const temperature = 6 * (1 - step / steps) + 0.02;
+    const cell = Math.floor(Math.random() * CELLS);
+    const previous = current[cell];
+
+    let replacement;
+    do {
+      replacement = Math.floor(Math.random() * TYPES);
+    } while (replacement === previous);
+
+    current[cell] = replacement;
+    const candidate = cost(current);
+
+    if (candidate <= score || Math.random() < Math.exp((score - candidate) / temperature)) {
+      score = candidate;
+    } else {
+      current[cell] = previous;
+    }
+  }
+
+  return score === 0 ? current : null;
+}
+
+/** Replays a cost-0 seed to recover the swap, both matches, and the settled board. */
 function runClassicChain(seed) {
   if (findRuns(seed).length) return null;
 
@@ -155,9 +226,9 @@ function solveRefill(settled) {
 function refillScript(settled, filled) {
   const script = [];
 
-  for (let col = 0; col < N; col++) {
+  for (let col = 0; col < COLS; col++) {
     const column = [];
-    for (let row = N - 1; row >= 0; row--) {
+    for (let row = ROWS - 1; row >= 0; row--) {
       const i = at(row, col);
       if (settled[i] === null) column.push(filled[i]);
     }
@@ -170,35 +241,39 @@ function refillScript(settled, filled) {
 function score({ chain, filled }) {
   let points = 0;
 
-  // A horizontal opening match in the middle band reads best on a portrait board.
-  if (chain.first.dir === 'row') points += 3;
-  const openingRow = rowOf(chain.first.cells[0]);
-  if (openingRow >= 1 && openingRow <= 3) points += 2;
+  if (chain.first.dir === 'row') points += 4;
+
+  // Mid-board keeps the match visible and leaves a tall stack above it to fall.
+  points -= Math.abs(rowOf(chain.first.cells[0]) - Math.floor(ROWS / 2)) * 1.4;
 
   const centrality = (cells) =>
-    cells.reduce((sum, i) => sum + Math.abs(colOf(i) - 2) + Math.abs(rowOf(i) - 2), 0) / cells.length;
+    cells.reduce((sum, i) => sum + Math.abs(colOf(i) - (COLS - 1) / 2), 0) / cells.length;
   points -= centrality(chain.first.cells) * 1.2;
-  points -= centrality(chain.second.cells) * 0.8;
+  points -= centrality(chain.second.cells) * 0.6;
 
   // A cascade in a different colour reads as a new match rather than a redraw.
-  if (chain.first.type !== chain.second.type) points += 1;
+  if (chain.first.type !== chain.second.type) points += 1.5;
+
+  // Reward a chain whose two matches between them move every column.
+  const columns = new Set([...chain.first.cells, ...chain.second.cells].map(colOf));
+  points += columns.size * 1.2;
 
   const holes = [];
   for (let i = 0; i < CELLS; i++) if (chain.settled[i] === null) holes.push(i);
-  points += new Set(holes.map((i) => filled[i])).size * 0.8;
+  points += new Set(holes.map((i) => filled[i])).size * 0.7;
 
   return points;
 }
 
 function render(cells) {
   const lines = [];
-  for (let row = 0; row < N; row++) {
+  for (let row = 0; row < ROWS; row++) {
     const cols = [];
-    for (let col = 0; col < N; col++) {
+    for (let col = 0; col < COLS; col++) {
       const type = cells[at(row, col)];
       cols.push(type === null ? '.' : String(type));
     }
-    lines.push('  ' + cols.join(' '));
+    lines.push(`  r${row} ` + cols.join(' '));
   }
   return lines.join('\n');
 }
@@ -219,8 +294,8 @@ function report(candidate) {
   console.log(render(filled));
 
   const rows = [];
-  for (let row = 0; row < N; row++) {
-    rows.push('    ' + seed.slice(row * N, row * N + N).join(', ') + ',');
+  for (let row = 0; row < ROWS; row++) {
+    rows.push('    ' + seed.slice(row * COLS, row * COLS + COLS).join(', ') + ',');
   }
 
   console.log('\n--- paste into src/game/variants.ts ---');
@@ -245,11 +320,15 @@ function verify(seed) {
   report({ seed, chain, filled });
 }
 
-function search(samples, top) {
-  const found = [];
+function search(wanted, top) {
+  const pool = [];
+  const started = Date.now();
+  let attempts = 0;
 
-  for (let n = 0; n < samples; n++) {
-    const seed = Array.from({ length: CELLS }, () => Math.floor(Math.random() * TYPES));
+  while (pool.length < wanted && Date.now() - started < 120000) {
+    attempts++;
+    const seed = anneal();
+    if (!seed) continue;
     if (new Set(seed).size < TYPES) continue;
 
     const chain = runClassicChain(seed);
@@ -258,14 +337,15 @@ function search(samples, top) {
     const filled = solveRefill(chain.settled);
     if (!filled) continue;
 
-    found.push({ seed, chain, filled });
+    pool.push({ seed, chain, filled });
   }
 
-  console.log(`sampled ${samples.toLocaleString()} boards, ${found.length} satisfy the classic chain`);
-  if (!found.length) return;
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(`${attempts} annealing runs produced ${pool.length} valid seeds in ${elapsed}s`);
+  if (!pool.length) return;
 
-  found.sort((a, b) => score(b) - score(a));
-  found.slice(0, top).forEach(report);
+  pool.sort((a, b) => score(b) - score(a));
+  pool.slice(0, top).forEach(report);
 }
 
 const args = new Map(
@@ -283,5 +363,5 @@ if (args.has('verify')) {
   }
   verify(seed);
 } else {
-  search(Number(args.get('samples') ?? 4_000_000), Number(args.get('top') ?? 3));
+  search(Number(args.get('candidates') ?? 250), Number(args.get('top') ?? 3));
 }

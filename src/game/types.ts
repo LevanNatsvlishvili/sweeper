@@ -1,7 +1,8 @@
 // Grid primitives and pure-data types shared by the board engine. Never imports Pixi.
 
-export const GRID_SIZE = 5;
-export const CELL_COUNT = GRID_SIZE * GRID_SIZE;
+export const GRID_ROWS = 10;
+export const GRID_COLS = 5;
+export const CELL_COUNT = GRID_ROWS * GRID_COLS;
 
 /** Index into the 5-entry candy palette. Shape and colour are paired per type so the board reads for colourblind players. */
 export type TypeId = 0 | 1 | 2 | 3 | 4;
@@ -9,7 +10,7 @@ export type TypeId = 0 | 1 | 2 | 3 | 4;
 /** 'stripedRow' clears its entire row when matched — the Cascade Jackpot variant's engineered tile. */
 export type Special = 'none' | 'stripedRow';
 
-/** Row-major grid index: row * GRID_SIZE + col. Row 0 is the top. */
+/** Row-major grid index: row * GRID_COLS + col. Row 0 is the top. */
 export type GridIndex = number;
 
 export interface Tile {
@@ -77,15 +78,15 @@ export type Step =
   | { readonly kind: 'settle' };
 
 export function indexOf(row: number, col: number): GridIndex {
-  return row * GRID_SIZE + col;
+  return row * GRID_COLS + col;
 }
 
 export function rowOf(index: GridIndex): number {
-  return Math.floor(index / GRID_SIZE);
+  return Math.floor(index / GRID_COLS);
 }
 
 export function colOf(index: GridIndex): number {
-  return index % GRID_SIZE;
+  return index % GRID_COLS;
 }
 
 export type Cardinal = 'left' | 'right' | 'up' | 'down';
@@ -97,6 +98,6 @@ export function areAdjacent(a: GridIndex, b: GridIndex): boolean {
 export function neighborOf(index: GridIndex, dir: Cardinal): GridIndex | null {
   const row = rowOf(index) + (dir === 'up' ? -1 : dir === 'down' ? 1 : 0);
   const col = colOf(index) + (dir === 'left' ? -1 : dir === 'right' ? 1 : 0);
-  if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
+  if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS) return null;
   return indexOf(row, col);
 }

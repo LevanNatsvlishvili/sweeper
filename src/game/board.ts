@@ -1,8 +1,9 @@
-// Pure-data 5x5 grid state and step-boundary mutations.
+// Pure-data 10x5 grid state and step-boundary mutations.
 
 import {
   CELL_COUNT,
-  GRID_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
   indexOf,
   rowOf,
   type Cell,
@@ -79,10 +80,10 @@ export function applyGravity(board: Board): Move[] {
   const moves: Move[] = [];
   const { cells } = board;
 
-  for (let col = 0; col < GRID_SIZE; col++) {
-    let write = GRID_SIZE - 1;
+  for (let col = 0; col < GRID_COLS; col++) {
+    let write = GRID_ROWS - 1;
 
-    for (let row = GRID_SIZE - 1; row >= 0; row--) {
+    for (let row = GRID_ROWS - 1; row >= 0; row--) {
       const from = indexOf(row, col);
       const tile = cells[from];
       if (!tile) continue;
@@ -112,7 +113,7 @@ export function applyGravity(board: Board): Move[] {
 export function applyRefill(board: Board, step: NonNullable<RefillStep>): Spawn[] {
   const spawns: Spawn[] = [];
 
-  for (let col = 0; col < GRID_SIZE; col++) {
+  for (let col = 0; col < GRID_COLS; col++) {
     const holes = holesInColumn(board, col);
     const scripted = step[col] ?? [];
 
@@ -137,7 +138,7 @@ export function applyRefill(board: Board, step: NonNullable<RefillStep>): Spawn[
 export function holesInColumn(board: Board, col: number): GridIndex[] {
   const holes: GridIndex[] = [];
 
-  for (let row = GRID_SIZE - 1; row >= 0; row--) {
+  for (let row = GRID_ROWS - 1; row >= 0; row--) {
     const index = indexOf(row, col);
     if (!board.cells[index]) holes.push(index);
   }
@@ -161,7 +162,7 @@ export function expandSpecials(board: Board, cleared: readonly GridIndex[]): Gri
     if (tile?.special !== 'stripedRow') continue;
 
     const row = rowOf(index);
-    for (let col = 0; col < GRID_SIZE; col++) expanded.add(indexOf(row, col));
+    for (let col = 0; col < GRID_COLS; col++) expanded.add(indexOf(row, col));
   }
 
   return [...expanded].sort((a, b) => a - b);
@@ -198,7 +199,7 @@ export function applyStep(board: Board, step: Step): void {
   }
 }
 
-/** Debug/test helper: the board's type layout as a plain 25-entry array. */
+/** Debug/test helper: the board's type layout as a plain CELL_COUNT-entry array. */
 export function typeLayout(board: Board): (TypeId | null)[] {
   return board.cells.map((cell) => cell?.type ?? null);
 }

@@ -279,7 +279,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     void pops.complete(variant.completionText);
     await waitFor(variant.timing.completeHold);
     state = 'CTA';
-    await cta.show(variant.timing.ctaSlide);
+    await cta.show(variant.timing.ctaSlide, variant.timing.tapAnywhereDelay);
   }
 
   async function start(): Promise<void> {

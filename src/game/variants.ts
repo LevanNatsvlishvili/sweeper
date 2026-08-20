@@ -24,8 +24,6 @@ export interface Timing {
   readonly promptHold: number;
   /** Idle time before the hint pulse starts. */
   readonly hintDelay: number;
-  /** The tension beat — tiles hesitate mid-swap as if it might not work. */
-  readonly wobble: number;
   readonly swapSnap: number;
   readonly clear: number;
   readonly gravity: number;
@@ -41,6 +39,11 @@ export interface Timing {
   readonly cascadeSpeedFloor: number;
   readonly completeHold: number;
   readonly ctaSlide: number;
+  /**
+   * Beat between the CTA landing and the whole screen becoming a click target. Without
+   * the delay the slide-up itself can eat a stray tap as an accidental clickthrough.
+   */
+  readonly tapAnywhereDelay: number;
 }
 
 export interface Variant {
@@ -79,7 +82,6 @@ const CLASSIC_TIMING: Timing = {
   introStagger: 1.2,
   promptHold: 0.8,
   hintDelay: 2.0,
-  wobble: 0.3,
   swapSnap: 0.2,
   clear: 0.36,
   gravity: 0.42,
@@ -89,6 +91,7 @@ const CLASSIC_TIMING: Timing = {
   cascadeSpeedFloor: 0.55,
   completeHold: 1.5,
   ctaSlide: 0.6,
+  tapAnywhereDelay: 2.0,
 };
 
 export const VARIANT_CLASSIC: Variant = {

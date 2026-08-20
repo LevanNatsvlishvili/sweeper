@@ -1,6 +1,7 @@
 // End-card CTA overlay with MRAID clickthrough.
 
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import gsap from 'gsap';
+import { Container, Graphics, Rectangle, Text, TextStyle } from 'pixi.js';
 
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../core/resize';
 import { animateTo } from '../game/tiles';
@@ -10,11 +11,21 @@ export const STORE_URL = 'https://play.google.com/store';
 const PANEL_HEIGHT = 168;
 
 export interface CtaOverlay {
-  show: (duration: number) => Promise<void>;
+  show: (duration: number, tapAnywhereDelay: number) => Promise<void>;
   dispose: () => void;
 }
 
 export function createCta(parent: Container, onClick: () => void): CtaOverlay {
+  /**
+   * Full-screen tap target, armed a beat after the panel lands. Added before the panel so
+   * the button still wins the hit test, and left inert until armed so the slide-up itself
+   * cannot swallow a stray tap as a clickthrough.
+   */
+  const tapLayer = new Container();
+  tapLayer.eventMode = 'none';
+  tapLayer.hitArea = new Rectangle(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+  parent.addChild(tapLayer);
+
   const root = new Container();
   root.eventMode = 'none';
   root.visible = false;
@@ -48,14 +59,26 @@ export function createCta(parent: Container, onClick: () => void): CtaOverlay {
   label.eventMode = 'none';
   root.addChild(label);
 
+  let armCall: gsap.core.Tween | null = null;
+
   return {
-    show: async (duration) => {
+    show: async (duration, tapAnywhereDelay) => {
       root.visible = true;
       root.eventMode = 'static';
       await animateTo(root, { y: DESIGN_HEIGHT - PANEL_HEIGHT - 36, duration, ease: 'power3.out' });
+
+      armCall = gsap.delayedCall(tapAnywhereDelay, () => {
+        tapLayer.eventMode = 'static';
+        tapLayer.cursor = 'pointer';
+        tapLayer.on('pointertap', onClick);
+      });
     },
     dispose: () => {
+      armCall?.kill();
+      armCall = null;
       button.off('pointertap', onClick);
+      tapLayer.off('pointertap', onClick);
+      tapLayer.destroy();
       root.destroy({ children: true });
     },
   };

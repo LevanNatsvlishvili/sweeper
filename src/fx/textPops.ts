@@ -49,7 +49,7 @@ export function createTextPops(parent: Container): TextPops {
     label.alpha = 1;
     label.scale.set(0.4 * scale);
     label.rotation = (Math.random() - 0.5) * 0.18;
-    await animateTo(label.scale, { x: scale, y: scale, duration: 0.28, ease: 'back.out(2.4)' });
+    await animateTo(label.scale, { x: scale, y: scale, duration: 0.32, ease: 'elastic.out(1, 0.55)' });
     await waitFor(life);
     await animateTo(label, { alpha: 0, duration: 0.18 });
     label.visible = false;
@@ -58,7 +58,7 @@ export function createTextPops(parent: Container): TextPops {
   return {
     combo: (beat) => {
       comboText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL_H / 2);
-      return pop(comboText, beat.text, beat.tint, beat.scale, 0.35);
+      return pop(comboText, beat.text, beat.tint, beat.scale, 0.5);
     },
     complete: (text) => {
       completeText.position.set(DESIGN_WIDTH / 2, BOARD_ORIGIN_Y + GRID_PIXEL_H / 2);

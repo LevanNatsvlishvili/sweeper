@@ -198,15 +198,6 @@ export async function playWrongSwap(
   await playSwap(viewA, viewB, startA, startB, duration);
 }
 
-export async function playClearPop(view: TileView, duration: number): Promise<void> {
-  const up = Math.min(0.14, duration * 0.35);
-  await animateTo(view.root.scale, { x: 1.15, y: 1.15, duration: up, ease: 'back.out(2)' });
-  await Promise.all([
-    animateTo(view.root.scale, { x: 0.15, y: 0.15, duration: duration - up, ease: 'back.in(1.6)' }),
-    animateTo(view.root, { alpha: 0, duration: duration - up, ease: 'power2.in' }),
-  ]);
-}
-
 export function destroyTileView(view: TileView): void {
   gsap.killTweensOf(view.root);
   gsap.killTweensOf(view.root.scale);

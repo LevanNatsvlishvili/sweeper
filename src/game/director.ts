@@ -15,13 +15,13 @@ import { isRunComplete, resolve } from './resolve';
 import { createRng } from './rng';
 import {
   BOARD_HIT_AREA,
+  BOARD_ORIGIN_Y,
+  GRID_PIXEL_H,
   animateTo,
   cellCenterAt,
   createDebugOverlay,
   destroyTileView,
   drawBoardBackdrop,
-  paletteOf,
-  playClearPop,
   playIntro,
   playSwap,
   playWrongSwap,
@@ -33,6 +33,7 @@ import {
 import { areAdjacent, type GridIndex, type Step, type Swap } from './types';
 import { comboBeat, type Variant } from './variants';
 import type { Mraid } from '../core/mraid';
+import { DESIGN_WIDTH } from '../core/resize';
 import gsap from 'gsap';
 
 export type DirectorState = 'INTRO' | 'AWAIT_INPUT' | 'WRONG_SWAP' | 'RESOLVING' | 'COMPLETE' | 'CTA';
@@ -46,7 +47,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   const rng = createRng(variant.rngSeed);
   const board: Board = generateBoard(rng);
   let views = spawnBoardViews(board, ctx.layers.tiles);
-  const particles = createParticleBurst(ctx.layers.fx);
+  const particles = createParticleBurst(ctx.layers.ui);
   const pops = createTextPops(ctx.layers.ui);
   const hud = createHud(ctx.layers.ui);
   const cta = createCta(ctx.layers.ui, () => mraid.clickthrough(STORE_URL));
@@ -55,8 +56,9 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   let state: DirectorState = 'INTRO';
   let selected: GridIndex | null = null;
   let hintViews: TileView[] = [];
-  let hintStronger = false;
   let hintCall: gsap.core.Tween | null = null;
+  /** Hint is opening-only. Any swap attempt (legal or not) retires it for the rest of the run. */
+  let hintUsed = false;
   let disposed = false;
 
   let score = 0;
@@ -125,6 +127,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
 
     stopIdle();
     clearSelection();
+    hintUsed = true;
     const swap: Swap = { a, b };
     if (!isLegalSwap(swap)) {
       state = 'WRONG_SWAP';
@@ -143,8 +146,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   }
 
   /**
-   * Schedules the idle hint: the best pair breathes and a swipe arrow travels across it.
-   * The hint only ever suggests — the player makes every move.
+   * Opening hint only. After the player has attempted any swap, this is a no-op.
    */
   function enterAwaitInput(): void {
     if (disposed) return;
@@ -152,13 +154,15 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     debug.refresh();
     stopIdle();
 
-    const delayHint = hintStronger ? 0.15 : variant.timing.hintDelay;
-    hintCall = gsap.delayedCall(delayHint, () => {
+    if (hintUsed) return;
+
+    hintCall = gsap.delayedCall(variant.timing.hintDelay, () => {
+      if (hintUsed || state !== 'AWAIT_INPUT') return;
       const valid = bestSwap(board.cells);
-      if (!valid || state !== 'AWAIT_INPUT') return;
+      if (!valid) return;
       const pair = [viewAt(valid.a), viewAt(valid.b)].filter((view): view is TileView => view !== null);
       hintViews = pair;
-      startHint(pair, hintStronger, ctx.layers.fx);
+      startHint(pair, false, ctx.layers.fx);
     });
   }
 
@@ -170,14 +174,12 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     if (viewA && viewB) {
       await playWrongSwap(viewA, viewB, cellCenterAt(swap.b), cellCenterAt(swap.a), variant.timing.swapSnap);
     }
-    hintStronger = true;
     enterAwaitInput();
   }
 
   async function playLegal(swap: Swap): Promise<void> {
     state = 'RESOLVING';
     stopIdle();
-    hintStronger = false;
 
     // Resolve on a copy first so the whole move is decided before any of it is animated,
     // then replay it step by step onto the live board.
@@ -243,18 +245,14 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
       case 'match': {
         const beat = comboBeat(variant, step.comboLevel);
         if (beat) void pops.combo(beat);
-        await Promise.all(
-          step.cleared.map(async (index) => {
-            const tile = board.cells[index];
-            if (!tile) return;
-            const view = views.get(tile.id);
-            if (!view) return;
-            particles.burst(view.root.x, view.root.y, paletteOf(tile.type).fill);
-            await playClearPop(view, timing.clear * scale);
-            views.delete(tile.id);
-            destroyTileView(view);
-          }),
-        );
+        for (const index of step.cleared) {
+          const tile = board.cells[index];
+          if (!tile) continue;
+          const view = views.get(tile.id);
+          if (!view) continue;
+          views.delete(tile.id);
+          destroyTileView(view);
+        }
         return;
       }
       case 'gravity':
@@ -273,6 +271,10 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     state = 'COMPLETE';
     stopIdle();
     await animateTo(ctx.world, { alpha: 0.58, duration: 0.25 });
+    const cx = DESIGN_WIDTH / 2;
+    const cy = BOARD_ORIGIN_Y + GRID_PIXEL_H / 2;
+    if (variant.finale === 'coinRain') void particles.coinRain(cx, cy);
+    else particles.stars(cx, cy);
     void pops.complete(variant.completionText);
     await waitFor(variant.timing.completeHold);
     state = 'CTA';

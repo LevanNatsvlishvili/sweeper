@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "size": "npm run build && node scripts/size.mjs"
+    "size": "npm run build && node scripts/size.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "node scripts/find-seed.mjs"
   },
   "dependencies": {
     "gsap": "^3.12.5",
@@ -14,6 +17,7 @@
   "devDependencies": {
     "typescript": "^5.7.3",
     "vite": "^7.0.0",
-    "vite-plugin-singlefile": "^2.1.0"
+    "vite-plugin-singlefile": "^2.1.0",
+    "vitest": "^4.1.11"
   }
 }

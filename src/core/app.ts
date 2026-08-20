@@ -3,8 +3,10 @@
 import { Application, Container } from 'pixi.js';
 
 export interface AppLayers {
-  track: Container;
-  game: Container;
+  /** The board's backing panel and cell grid. */
+  boardBg: Container;
+  /** One container per candy, added and removed as tiles clear and refill. */
+  tiles: Container;
   fx: Container;
   ui: Container;
   debug: Container;
@@ -14,7 +16,7 @@ export interface AppContext {
   app: Application;
   /** Wraps all layers so resize.ts can scale/letterbox them as one unit. */
   root: Container;
-  /** Gameplay layers only (track / game / fx). Shake this — never the CTA/UI layer. */
+  /** Gameplay layers only (boardBg / tiles / fx). Shake this — never the CTA/UI layer. */
   world: Container;
   layers: AppLayers;
 }
@@ -43,15 +45,15 @@ export async function createApp(): Promise<AppContext> {
   document.body.appendChild(app.canvas);
 
   const layers: AppLayers = {
-    track: new Container(),
-    game: new Container(),
+    boardBg: new Container(),
+    tiles: new Container(),
     fx: new Container(),
     ui: new Container(),
     debug: new Container(),
   };
 
   const world = new Container();
-  world.addChild(layers.track, layers.game, layers.fx);
+  world.addChild(layers.boardBg, layers.tiles, layers.fx);
   // UI + debug sit on root so screen shake never moves the CTA overlay.
   const root = new Container();
   root.addChild(world, layers.ui, layers.debug);

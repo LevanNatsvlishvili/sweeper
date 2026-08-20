@@ -354,9 +354,11 @@ function drawCandy(type: TypeId, special: Special): Container {
   candy.addChild(body, shine);
 
   if (special === 'stripedRow') {
-    const stripe = new Graphics().roundRect(-r, -r * 0.16, r * 2, r * 0.32, 6).fill({ color: 0xffffff, alpha: 0.4 });
+    const stripe = new Graphics().roundRect(-r, -r * 0.18, r * 2, r * 0.36, 6).fill({ color: 0xffffff, alpha: 0.55 });
     stripe.angle = -28;
-    candy.addChild(stripe);
+    const stripe2 = new Graphics().roundRect(-r, r * 0.12, r * 2, r * 0.18, 5).fill({ color: 0xffffff, alpha: 0.28 });
+    stripe2.angle = -28;
+    candy.addChild(stripe, stripe2);
   }
 
   return candy;

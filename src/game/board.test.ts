@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyGravity,
   applyRefill,
+  applyStep,
   applySwap,
   clearCells,
   cloneBoard,
@@ -10,6 +11,7 @@ import {
   expandSpecials,
   holesInColumn,
   isFull,
+  placeSpawns,
   replaceAll,
   typeLayout,
 } from './board';
@@ -137,6 +139,38 @@ describe('expandSpecials', () => {
 
   it('leaves an ordinary clear alone', () => {
     expect(expandSpecials(board(), [30, 31, 32])).toEqual([30, 31, 32]);
+  });
+});
+
+describe('placeSpawns', () => {
+  it('honours a striped leftover special instead of flattening it to none', () => {
+    const b = board();
+    clearCells(b, [indexOf(4, 2)]);
+
+    placeSpawns(b, [
+      { tileId: 900, type: 3, special: 'stripedRow', to: indexOf(4, 2), dropFromRow: 4 },
+    ]);
+
+    expect(b.cells[indexOf(4, 2)]).toMatchObject({ id: 900, type: 3, special: 'stripedRow' });
+    expect(b.nextTileId).toBeGreaterThan(900);
+  });
+});
+
+describe('applyStep match leftovers', () => {
+  it('clears the run then plants the striped leftover in the hole', () => {
+    const b = board();
+    const hole = indexOf(3, 1);
+
+    applyStep(b, {
+      kind: 'match',
+      runs: [{ cells: [hole], type: 1, dir: 'row' }],
+      cleared: [hole],
+      comboLevel: 0,
+      points: 80,
+      spawned: [{ tileId: 700, type: 1, special: 'stripedRow', to: hole, dropFromRow: 3 }],
+    });
+
+    expect(b.cells[hole]).toMatchObject({ id: 700, type: 1, special: 'stripedRow' });
   });
 });
 

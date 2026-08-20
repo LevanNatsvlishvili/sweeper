@@ -7,12 +7,13 @@ import {
   clearCells,
   expandSpecials,
   isFull,
+  placeSpawns,
   type Board,
 } from './board';
 import { generateBoard, hasLegalMove, reshuffle } from './generate';
 import { bestSwap, clearedIndices, findMatches } from './matcher';
 import { createRng, type Rng } from './rng';
-import type { Step, Swap } from './types';
+import { rowOf, type Run, type Spawn, type Step, type Swap } from './types';
 import type { Scoring, Variant } from './variants';
 
 /**
@@ -31,7 +32,13 @@ export interface Resolution {
  * animate plus what the move scored. The director awaits one animation per step;
  * verifyRun() drives this very same function headlessly, so the two cannot disagree.
  */
-export function resolve(board: Board, swap: Swap, rng: Rng, scoring: Scoring): Resolution {
+export function resolve(
+  board: Board,
+  swap: Swap,
+  rng: Rng,
+  scoring: Scoring,
+  stripeAt: number | null = null,
+): Resolution {
   const steps: Step[] = [{ kind: 'swap', a: swap.a, b: swap.b }];
   applySwap(board, swap);
 
@@ -52,8 +59,12 @@ export function resolve(board: Board, swap: Swap, rng: Rng, scoring: Scoring): R
     const gained = cleared.length * scoring.perTile * multiplier;
     points += gained;
 
+    // Leftovers are chosen from the runs before the cells empty, then placed into the
+    // holes so gravity can carry them. Classic passes null and this is a no-op.
+    const spawned = leftoverSpawns(board, runs, swap, stripeAt);
     clearCells(board, cleared);
-    steps.push({ kind: 'match', runs, cleared, comboLevel, points: gained });
+    placeSpawns(board, spawned);
+    steps.push({ kind: 'match', runs, cleared, comboLevel, points: gained, spawned });
 
     steps.push({ kind: 'gravity', moves: applyGravity(board) });
     steps.push({ kind: 'refill', spawns: applyRefill(board, rng) });
@@ -126,7 +137,7 @@ export function verifyRun(variant: Variant): RunReport {
     }
     let outcome: Resolution;
     try {
-      outcome = resolve(board, swap, rng, variant.scoring);
+      outcome = resolve(board, swap, rng, variant.scoring, variant.stripeAt);
     } catch (error) {
       problems.push(`move ${moves}: ${(error as Error).message}`);
       break;
@@ -175,4 +186,45 @@ export function assertRun(variant: Variant): RunReport {
   }
 
   return report;
+}
+
+/**
+ * A 4+ run leaves one striped candy in the hole it just made. Prefers the tile the
+ * player swapped into, so the special reads as the result of that move rather than
+ * appearing in an arbitrary cell of the line.
+ */
+function leftoverSpawns(
+  board: Board,
+  runs: readonly Run[],
+  swap: Swap,
+  stripeAt: number | null,
+): Spawn[] {
+  if (stripeAt == null) return [];
+
+  const used = new Set<number>();
+  const spawns: Spawn[] = [];
+  let nextId = board.nextTileId;
+
+  for (const run of runs) {
+    if (run.cells.length < stripeAt) continue;
+    const at = leftoverCell(run, swap, used);
+    if (at == null) continue;
+    used.add(at);
+    spawns.push({
+      tileId: nextId++,
+      type: run.type,
+      special: 'stripedRow',
+      to: at,
+      dropFromRow: rowOf(at),
+    });
+  }
+
+  return spawns;
+}
+
+function leftoverCell(run: Run, swap: Swap, used: ReadonlySet<number>): number | null {
+  for (const index of [swap.b, swap.a, ...run.cells]) {
+    if (run.cells.includes(index) && !used.has(index)) return index;
+  }
+  return null;
 }

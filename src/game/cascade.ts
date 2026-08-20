@@ -32,6 +32,31 @@ export async function playGravity(views: ReadonlyMap<number, TileView>, moves: r
   );
 }
 
+/** A striped leftover pops into the hole a 4+ run just made, then gravity can carry it. */
+export async function playLeftovers(
+  views: Map<number, TileView>,
+  parent: Container,
+  spawns: readonly Spawn[],
+): Promise<void> {
+  if (spawns.length === 0) return;
+
+  for (const spawn of spawns) {
+    const view = createTileView({ id: spawn.tileId, type: spawn.type, special: spawn.special });
+    placeTileView(view, rowOf(spawn.to), colOf(spawn.to));
+    view.root.scale.set(0);
+    parent.addChild(view.root);
+    views.set(spawn.tileId, view);
+  }
+
+  await Promise.all(
+    spawns.map((spawn) => {
+      const view = views.get(spawn.tileId);
+      if (!view) return Promise.resolve();
+      return animateTo(view.root.scale, { x: 1, y: 1, duration: 0.18, ease: 'back.out(2)' });
+    }),
+  );
+}
+
 export async function playRefill(
   views: Map<number, TileView>,
   parent: Container,
@@ -41,7 +66,7 @@ export async function playRefill(
   if (spawns.length === 0) return;
 
   for (const spawn of spawns) {
-    const view = createTileView({ id: spawn.tileId, type: spawn.type, special: 'none' });
+    const view = createTileView({ id: spawn.tileId, type: spawn.type, special: spawn.special });
     placeTileView(view, spawn.dropFromRow, colOf(spawn.to));
     parent.addChild(view.root);
     views.set(spawn.tileId, view);

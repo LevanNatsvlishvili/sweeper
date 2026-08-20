@@ -59,6 +59,12 @@ export interface Variant {
   readonly expectedMaxMoves: number;
   readonly scoring: Scoring;
   /**
+   * A run of this many tiles leaves a striped leftover behind. `null` means never —
+   * Classic plays without specials. Cascade uses 4 because a 5-col board almost never
+   * produces a natural 5, and the leftover is how the row-clear actually shows up.
+   */
+  readonly stripeAt: number | null;
+  /**
    * Indexed by combo level. `null` means "no pop" — a plain match should not shout, so
    * only actual cascades get text and the screen stays calm between chains.
    * Levels past the end reuse the last entry.
@@ -93,6 +99,7 @@ export const VARIANT_CLASSIC: Variant = {
   minMoves: 3,
   expectedMaxMoves: 15,
   scoring: { perTile: 20, maxMultiplier: 4 },
+  stripeAt: null,
   combos: [
     null,
     { text: 'SWEET! x2', scale: 1.15, tint: 0xffd166 },
@@ -105,6 +112,27 @@ export const VARIANT_CLASSIC: Variant = {
   timing: CLASSIC_TIMING,
 };
 
+export const VARIANT_CASCADE: Variant = {
+  id: 'cascade',
+  // Chosen with verifyRun: 4-move finish, six striped leftovers, six row-clears.
+  rngSeed: 183,
+  scoreTarget: 1400,
+  minMoves: 4,
+  expectedMaxMoves: 18,
+  scoring: { perTile: 20, maxMultiplier: 4 },
+  stripeAt: 4,
+  combos: [
+    null,
+    { text: 'SWEET! x2', scale: 1.25, tint: 0xffd166 },
+    { text: 'x3 COMBO!', scale: 1.5, tint: 0xff8c42 },
+    { text: 'x4 BLAZING!', scale: 1.7, tint: 0xff5c39 },
+    { text: 'JACKPOT!', scale: 2.0, tint: 0xff3b6b },
+  ],
+  completionText: 'JACKPOT!',
+  finale: 'coinRain',
+  timing: CLASSIC_TIMING,
+};
+
 /** Combo text for a cascade level, holding the last beat for anything deeper. */
 export function comboBeat(variant: Variant, level: number): ComboBeat | null {
   if (level < variant.combos.length) return variant.combos[level];
@@ -113,6 +141,7 @@ export function comboBeat(variant: Variant, level: number): ComboBeat | null {
 
 export const VARIANTS: Readonly<Record<string, Variant>> = {
   classic: VARIANT_CLASSIC,
+  cascade: VARIANT_CASCADE,
 };
 
 /** ?variant=cascade selects a variant; anything unrecognised falls back to classic. */

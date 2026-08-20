@@ -120,7 +120,7 @@ export function applyRefill(board: Board, rng: Rng): Spawn[] {
       const tile: Tile = { id: board.nextTileId++, type, special: 'none' };
       board.cells[to] = tile;
       // Stack the incoming tiles above the board in fall order: -1, -2, -3...
-      spawns.push({ tileId: tile.id, type, to, dropFromRow: -1 - order });
+      spawns.push({ tileId: tile.id, type, special: 'none', to, dropFromRow: -1 - order });
     });
   }
 
@@ -168,10 +168,10 @@ export function expandSpecials(board: Board, cleared: readonly GridIndex[]): Gri
   return [...expanded].sort((a, b) => a - b);
 }
 
-/** Places refill tiles using the ids resolve() already assigned, so the view map stays in sync. */
+/** Places refill / leftover tiles using the ids resolve() already assigned, so the view map stays in sync. */
 export function placeSpawns(board: Board, spawns: readonly Spawn[]): void {
   for (const spawn of spawns) {
-    board.cells[spawn.to] = { id: spawn.tileId, type: spawn.type, special: 'none' };
+    board.cells[spawn.to] = { id: spawn.tileId, type: spawn.type, special: spawn.special };
     if (spawn.tileId >= board.nextTileId) board.nextTileId = spawn.tileId + 1;
   }
 }
@@ -187,6 +187,7 @@ export function applyStep(board: Board, step: Step): void {
       break;
     case 'match':
       clearCells(board, step.cleared);
+      placeSpawns(board, step.spawned);
       break;
     case 'gravity':
       applyGravity(board);
@@ -202,4 +203,9 @@ export function applyStep(board: Board, step: Step): void {
 /** Debug/test helper: the board's type layout as a plain CELL_COUNT-entry array. */
 export function typeLayout(board: Board): (TypeId | null)[] {
   return board.cells.map((cell) => cell?.type ?? null);
+}
+
+/** Debug/test helper: specials per cell, so leftover stripes cannot drift from applyStep. */
+export function specialLayout(board: Board): (Special | null)[] {
+  return board.cells.map((cell) => cell?.special ?? null);
 }

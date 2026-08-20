@@ -8,7 +8,7 @@ import { createHud } from '../ui/hud';
 import { startHint, stopHint } from '../ui/hint';
 import { STORE_URL, createCta } from '../ui/cta';
 import { applyStep, cloneBoard, type Board } from './board';
-import { playGravity, playRefill, playSettle } from './cascade';
+import { playGravity, playLeftovers, playRefill, playSettle } from './cascade';
 import { generateBoard, hasLegalMove, reshuffle } from './generate';
 import { bestSwap, findValidSwaps } from './matcher';
 import { isRunComplete, resolve } from './resolve';
@@ -184,7 +184,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     // Resolve on a copy first so the whole move is decided before any of it is animated,
     // then replay it step by step onto the live board.
     const planned = cloneBoard(board);
-    const { steps, points } = resolve(planned, swap, rng, variant.scoring);
+    const { steps, points } = resolve(planned, swap, rng, variant.scoring, variant.stripeAt);
 
     // Each cascade level plays a little faster than the last, so a long chain builds
     // momentum rather than making the player wait through it.
@@ -253,6 +253,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
           views.delete(tile.id);
           destroyTileView(view);
         }
+        await playLeftovers(views, ctx.layers.tiles, step.spawned);
         return;
       }
       case 'gravity':

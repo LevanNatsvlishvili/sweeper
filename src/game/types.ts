@@ -46,6 +46,7 @@ export interface Move {
 export interface Spawn {
   readonly tileId: number;
   readonly type: TypeId;
+  readonly special: Special;
   readonly to: GridIndex;
   /** Virtual row above the board to fall in from; -1 sits one cell above row 0. */
   readonly dropFromRow: number;
@@ -69,6 +70,12 @@ export type Step =
       readonly comboLevel: number;
       /** Points this clear is worth, already multiplied by the combo level. */
       readonly points: number;
+      /**
+       * Striped leftovers from a 4+ run. Empty when the variant does not award them.
+       * Placed into the holes after the clear, before gravity, so they can fall with
+       * the rest of the column.
+       */
+      readonly spawned: readonly Spawn[];
     }
   | { readonly kind: 'gravity'; readonly moves: readonly Move[] }
   | { readonly kind: 'refill'; readonly spawns: readonly Spawn[] }

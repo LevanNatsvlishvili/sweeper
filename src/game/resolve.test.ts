@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyStep, cloneBoard, createBoard, isFull, typeLayout } from './board';
+import { applyStep, cloneBoard, createBoard, isFull, specialLayout, typeLayout } from './board';
 import { generateBoard, hasLegalMove, reshuffle } from './generate';
 import { bestSwap, findMatches, findValidSwaps } from './matcher';
 import { assertRun, isRunComplete, resolve, verifyRun } from './resolve';
 import { createRng } from './rng';
-import { CELL_COUNT, GRID_COLS, type Step, type TypeId } from './types';
-import { VARIANT_CLASSIC, type Variant } from './variants';
+import { CELL_COUNT, GRID_COLS, indexOf, type Step, type TypeId } from './types';
+import { selectVariant, VARIANT_CASCADE, VARIANT_CLASSIC, type Variant } from './variants';
 
 const SEEDS = [1, 2, 3, 17, 404, 20260820];
 const matchSteps = (steps: readonly Step[]) =>
@@ -186,6 +186,120 @@ describe('resolve', () => {
     expect(run()).toEqual(run());
   });
 });
+
+const LATTICE: TypeId[] = Array.from(
+  { length: CELL_COUNT },
+  (_, i) => ((2 * Math.floor(i / GRID_COLS) + (i % GRID_COLS)) % 5) as TypeId,
+);
+
+/** Opening-match-free lattice with a 4-in-a-row sitting behind one swap. */
+function fourMatchBoard(): ReturnType<typeof createBoard> {
+  const layout = LATTICE.slice();
+  layout[indexOf(5, 1)] = 0;
+  layout[indexOf(5, 2)] = 1;
+  layout[indexOf(5, 3)] = 0;
+  layout[indexOf(6, 2)] = 0;
+  return createBoard(layout);
+}
+
+/** Same lattice, but the swap only completes a 3. */
+function threeMatchBoard(): ReturnType<typeof createBoard> {
+  const layout = LATTICE.slice();
+  layout[indexOf(5, 1)] = 0;
+  layout[indexOf(6, 2)] = 0;
+  return createBoard(layout);
+}
+
+const FOUR_SWAP = { a: indexOf(5, 2), b: indexOf(6, 2) };
+
+describe('striped leftovers', () => {
+  it('leaves a striped candy in a 4-match when stripeAt is 4', () => {
+    const board = fourMatchBoard();
+    expect(findMatches(board.cells)).toEqual([]);
+
+    const { steps } = resolve(board, FOUR_SWAP, createRng(1), VARIANT_CLASSIC.scoring, 4);
+    const first = matchSteps(steps)[0];
+
+    expect(first.cleared).toHaveLength(4);
+    expect(first.spawned).toHaveLength(1);
+    expect(first.spawned[0]).toMatchObject({
+      type: 0,
+      special: 'stripedRow',
+      to: FOUR_SWAP.a,
+    });
+  });
+
+  it('does not award a stripe for a 3-match', () => {
+    const { steps } = resolve(threeMatchBoard(), FOUR_SWAP, createRng(1), VARIANT_CLASSIC.scoring, 4);
+    expect(matchSteps(steps)[0].spawned).toEqual([]);
+  });
+
+  it('never awards a stripe when stripeAt is null', () => {
+    const { steps } = resolve(fourMatchBoard(), FOUR_SWAP, createRng(1), VARIANT_CLASSIC.scoring, null);
+    expect(matchSteps(steps)[0].spawned).toEqual([]);
+  });
+
+  it('replays leftovers onto a live board without drifting specials', () => {
+    const planned = fourMatchBoard();
+    const live = fourMatchBoard();
+    const { steps } = resolve(planned, FOUR_SWAP, createRng(9), VARIANT_CLASSIC.scoring, 4);
+    for (const step of steps) applyStep(live, step);
+
+    expect(typeLayout(live)).toEqual(typeLayout(planned));
+    expect(specialLayout(live)).toEqual(specialLayout(planned));
+  });
+});
+
+describe('verifyRun(VARIANT_CASCADE)', () => {
+  it('finishes hands-free with no problems', () => {
+    const report = verifyRun(VARIANT_CASCADE);
+
+    expect(report.problems).toEqual([]);
+    expect(report.ok).toBe(true);
+    expect(report.score).toBeGreaterThanOrEqual(VARIANT_CASCADE.scoreTarget);
+    expect(report.moves).toBeGreaterThanOrEqual(VARIANT_CASCADE.minMoves);
+    expect(report.moves).toBeLessThanOrEqual(VARIANT_CASCADE.expectedMaxMoves);
+  });
+
+  it('keeps the shipped run punchy', () => {
+    expect(verifyRun(VARIANT_CASCADE).moves).toBeLessThanOrEqual(6);
+  });
+
+  it('produces at least one striped leftover in the simulated run', () => {
+    expect(stripesInRun(VARIANT_CASCADE)).toBeGreaterThan(0);
+  });
+});
+
+describe('selectVariant', () => {
+  it('routes ?variant=cascade to the jackpot config', () => {
+    expect(selectVariant('?variant=cascade')).toBe(VARIANT_CASCADE);
+  });
+
+  it('falls back to classic for anything unrecognised', () => {
+    expect(selectVariant('?variant=nope')).toBe(VARIANT_CLASSIC);
+    expect(selectVariant('')).toBe(VARIANT_CLASSIC);
+  });
+});
+
+function stripesInRun(variant: Variant): number {
+  const rng = createRng(variant.rngSeed);
+  const board = generateBoard(rng);
+  let score = 0;
+  let moves = 0;
+  let stripes = 0;
+
+  while (!isRunComplete(variant, score, moves) && moves < 200) {
+    if (!hasLegalMove(board)) reshuffle(board, rng);
+    const swap = bestSwap(board.cells);
+    if (!swap) break;
+    const outcome = resolve(board, swap, rng, variant.scoring, variant.stripeAt);
+    for (const step of matchSteps(outcome.steps)) stripes += step.spawned.length;
+    score += outcome.points;
+    moves++;
+  }
+
+  return stripes;
+}
 
 describe('reshuffle', () => {
   it('rescues a board with no legal moves', () => {

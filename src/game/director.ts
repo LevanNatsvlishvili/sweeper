@@ -52,7 +52,6 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   let hintViews: TileView[] = [];
   let hintStronger = false;
   let hintCall: gsap.core.Tween | null = null;
-  let assistCall: gsap.core.Tween | null = null;
   let disposed = false;
 
   drawBoardBackdrop(ctx.layers.boardBg);
@@ -130,9 +129,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
 
   function stopIdle(): void {
     hintCall?.kill();
-    assistCall?.kill();
     hintCall = null;
-    assistCall = null;
     stopHint(hintViews);
     hintViews = [];
   }
@@ -149,13 +146,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
       if (!valid || state !== 'AWAIT_INPUT') return;
       const pair = [viewAt(valid.a), viewAt(valid.b)].filter((view): view is TileView => view !== null);
       hintViews = pair;
-      startHint(pair, hintStronger);
-    });
-
-    assistCall = gsap.delayedCall(variant.timing.assistDelay, () => {
-      const valid = findValidSwaps(board.cells)[0];
-      if (!valid || state !== 'AWAIT_INPUT') return;
-      void trySwap(valid.a, valid.b);
+      startHint(pair, hintStronger, ctx.layers.fx);
     });
   }
 

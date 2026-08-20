@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { clearCells, createBoard } from './board';
-import { clearedIndices, findMatches, findValidSwaps } from './matcher';
-import { indexOf, type TypeId } from './types';
-import { VARIANT_CLASSIC } from './variants';
+import { generateBoard } from './generate';
+import { bestSwap, clearedIndices, findMatches, findValidSwaps } from './matcher';
+import { createRng } from './rng';
+import { CELL_COUNT, GRID_COLS, type TypeId } from './types';
+
+const SEEDS = [1, 2, 3, 17, 404, 20260820];
 
 const cellsOf = (layout: TypeId[]) => createBoard(layout).cells;
 
@@ -119,8 +122,10 @@ describe('findMatches', () => {
     expect(findMatches(cells)).toHaveLength(0);
   });
 
-  it('returns nothing for the seeded board', () => {
-    expect(findMatches(cellsOf([...VARIANT_CLASSIC.seed] as TypeId[]))).toEqual([]);
+  it('returns nothing for a freshly generated board', () => {
+    for (const seed of SEEDS) {
+      expect(findMatches(generateBoard(createRng(seed)).cells)).toEqual([]);
+    }
   });
 });
 
@@ -149,17 +154,26 @@ describe('clearedIndices', () => {
 });
 
 describe('findValidSwaps', () => {
-  it('finds exactly one swap on the classic seed', () => {
-    const cells = cellsOf([...VARIANT_CLASSIC.seed] as TypeId[]);
+  it('only returns swaps that really do create a match', () => {
+    for (const seed of SEEDS) {
+      const cells = generateBoard(createRng(seed)).cells;
 
-    const swaps = findValidSwaps(cells);
+      for (const swap of findValidSwaps(cells)) {
+        const probe = cells.slice();
+        [probe[swap.a], probe[swap.b]] = [probe[swap.b], probe[swap.a]];
+        expect(findMatches(probe).length).toBeGreaterThan(0);
+      }
+    }
+  });
 
-    expect(swaps).toHaveLength(1);
-    expect(swaps[0]).toEqual({ a: indexOf(5, 1), b: indexOf(5, 2) });
+  it('finds a legal move on every generated board', () => {
+    for (const seed of SEEDS) {
+      expect(findValidSwaps(generateBoard(createRng(seed)).cells).length).toBeGreaterThan(0);
+    }
   });
 
   it('leaves the board untouched', () => {
-    const cells = cellsOf([...VARIANT_CLASSIC.seed] as TypeId[]);
+    const cells = generateBoard(createRng(5)).cells;
     const before = cells.slice();
 
     findValidSwaps(cells);
@@ -168,9 +182,48 @@ describe('findValidSwaps', () => {
   });
 
   it('ignores pairs involving a hole', () => {
-    const board = createBoard([...VARIANT_CLASSIC.seed] as TypeId[]);
-    clearCells(board, [indexOf(5, 1), indexOf(5, 2)]);
+    const board = generateBoard(createRng(5));
+    const swap = findValidSwaps(board.cells)[0];
+    clearCells(board, [swap.a, swap.b]);
 
-    expect(findValidSwaps(board.cells)).toEqual([]);
+    for (const found of findValidSwaps(board.cells)) {
+      expect(found.a).not.toBe(swap.a);
+      expect(found.b).not.toBe(swap.b);
+    }
+  });
+});
+
+describe('bestSwap', () => {
+  it('picks a move that clears at least as much as any other legal move', () => {
+    for (const seed of SEEDS) {
+      const cells = generateBoard(createRng(seed)).cells;
+
+      const clearedBy = (swap: { a: number; b: number }) => {
+        const probe = cells.slice();
+        [probe[swap.a], probe[swap.b]] = [probe[swap.b], probe[swap.a]];
+        return clearedIndices(findMatches(probe)).length;
+      };
+
+      const best = bestSwap(cells)!;
+      expect(best).not.toBeNull();
+
+      for (const swap of findValidSwaps(cells)) {
+        expect(clearedBy(best)).toBeGreaterThanOrEqual(clearedBy(swap));
+      }
+    }
+  });
+
+  it('returns null when the board has no legal move', () => {
+    // The (2*row + col) % 5 lattice is match-free AND has zero legal swaps — every
+    // adjacent pair is a different type, so no exchange can line three up.
+    const deadlock = Array.from(
+      { length: CELL_COUNT },
+      (_, i) => ((2 * Math.floor(i / GRID_COLS) + (i % GRID_COLS)) % 5) as TypeId,
+    );
+    const cells = createBoard(deadlock).cells;
+
+    expect(findMatches(cells)).toEqual([]);
+    expect(findValidSwaps(cells)).toEqual([]);
+    expect(bestSwap(cells)).toBeNull();
   });
 });

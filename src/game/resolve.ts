@@ -1,137 +1,177 @@
-// The resolution pipeline as one pure function, plus the seed assertion that guards it.
+// The per-move resolution pipeline, plus a headless playthrough that guards the run.
 
 import {
   applyGravity,
   applyRefill,
   applySwap,
   clearCells,
-  createBoard,
   expandSpecials,
   isFull,
   type Board,
 } from './board';
-import { clearedIndices, findMatches, findValidSwaps } from './matcher';
+import { generateBoard, hasLegalMove, reshuffle } from './generate';
+import { bestSwap, clearedIndices, findMatches } from './matcher';
+import { createRng, type Rng } from './rng';
 import type { Step, Swap } from './types';
-import type { Variant } from './variants';
-
-/** Guards against a mis-scripted refill spinning the cascade loop forever. */
-const MAX_RESOLUTION_STEPS = 8;
+import type { Scoring, Variant } from './variants';
 
 /**
- * Plays a swap out to a settled board, mutating `board`, and returns the ordered steps
- * to animate. The director awaits one animation per step; verifySeed() runs the very
- * same function headlessly. Because they share this code path they cannot disagree —
- * which is the whole point of asserting the seed at boot.
+ * Refills are freely random, so in principle a chain could keep feeding itself. In
+ * practice chains die out fast; this is the backstop that keeps a bad streak finite.
  */
-export function resolve(board: Board, swap: Swap, variant: Variant): Step[] {
+const MAX_CASCADE_DEPTH = 16;
+
+export interface Resolution {
+  readonly steps: readonly Step[];
+  readonly points: number;
+}
+
+/**
+ * Plays one swap out to a settled board, mutating `board`, and returns the steps to
+ * animate plus what the move scored. The director awaits one animation per step;
+ * verifyRun() drives this very same function headlessly, so the two cannot disagree.
+ */
+export function resolve(board: Board, swap: Swap, rng: Rng, scoring: Scoring): Resolution {
   const steps: Step[] = [{ kind: 'swap', a: swap.a, b: swap.b }];
   applySwap(board, swap);
+
+  let points = 0;
 
   for (let comboLevel = 0; ; comboLevel++) {
     const runs = findMatches(board.cells);
     if (runs.length === 0) break;
 
-    if (comboLevel >= MAX_RESOLUTION_STEPS) {
-      throw new Error(`resolution exceeded ${MAX_RESOLUTION_STEPS} steps — refill script is feeding the cascade`);
+    if (comboLevel >= MAX_CASCADE_DEPTH) {
+      throw new Error(`cascade exceeded ${MAX_CASCADE_DEPTH} levels — refills are feeding the chain`);
     }
 
     const cleared = expandSpecials(board, clearedIndices(runs));
+    // Deeper cascades pay progressively more, up to the cap that stops one lucky
+    // runaway chain from clearing the entire goal in a single move.
+    const multiplier = Math.min(comboLevel + 1, scoring.maxMultiplier);
+    const gained = cleared.length * scoring.perTile * multiplier;
+    points += gained;
+
     clearCells(board, cleared);
-    steps.push({ kind: 'match', runs, cleared, comboLevel });
+    steps.push({ kind: 'match', runs, cleared, comboLevel, points: gained });
 
     steps.push({ kind: 'gravity', moves: applyGravity(board) });
-
-    if (comboLevel >= variant.refills.length) {
-      throw new Error(`variant "${variant.id}" has no refill script for step ${comboLevel}`);
-    }
-
-    // A null script holds the holes open so the next match comes from falling tiles alone.
-    const scripted = variant.refills[comboLevel];
-    if (scripted) steps.push({ kind: 'refill', spawns: applyRefill(board, scripted) });
+    steps.push({ kind: 'refill', spawns: applyRefill(board, rng) });
   }
 
   steps.push({ kind: 'settle' });
-  return steps;
+  return { steps, points };
 }
 
-export interface SeedReport {
+/** The ad ends once the goal is met AND the player has had a real go at it. */
+export function isRunComplete(variant: Variant, score: number, moves: number): boolean {
+  return score >= variant.scoreTarget && moves >= variant.minMoves;
+}
+
+export interface RunReport {
   readonly ok: boolean;
   readonly problems: readonly string[];
-  /** The one rigged swap, when the seed has exactly one. */
-  readonly swap: Swap | null;
-  readonly steps: readonly Step[];
+  /** Moves the simulated player needed to reach the target. */
+  readonly moves: number;
+  readonly score: number;
+  readonly reshuffles: number;
 }
 
+/** Hard cap on the simulated playthrough, so a broken variant fails instead of hanging. */
+const MAX_SIMULATED_MOVES = 200;
+
 /**
- * Checks a variant's whole deterministic promise: one valid swap, the scripted match
- * chain, and a settled full board with nothing left to match. Returns every problem it
- * finds rather than throwing on the first, so a broken seed reports its full story.
+ * Plays a whole run headlessly as a competent player would — always take the best legal
+ * swap — and checks the ad is actually completable. This is the free-play replacement for
+ * the old fixed-seed assertion: with a scripted board there was one chain to verify, but
+ * now the promise is "this seed reaches the target, never dead-ends, and always settles".
+ *
+ * It is a solvability check, not a description of shipped behaviour: nothing plays the
+ * game on its own, so a real run depends entirely on the player and will diverge from
+ * this one at move one. Read the move count as a pacing sanity check.
  */
-export function verifySeed(variant: Variant): SeedReport {
+export function verifyRun(variant: Variant): RunReport {
   const problems: string[] = [];
-  const board = createBoard(variant.seed, variant.specials);
+  const rng = createRng(variant.rngSeed);
 
-  const opening = findMatches(board.cells);
-  if (opening.length > 0) {
-    problems.push(`seed already contains ${opening.length} match(es) before any swap`);
-  }
-
-  const valid = findValidSwaps(board.cells);
-  if (valid.length !== 1) {
-    problems.push(`expected exactly 1 valid swap, found ${valid.length}`);
-    return { ok: false, problems, swap: null, steps: [] };
-  }
-
-  const swap = valid[0];
-  let steps: Step[];
+  let board: Board;
   try {
-    steps = resolve(board, swap, variant);
+    board = generateBoard(rng);
   } catch (error) {
-    problems.push((error as Error).message);
-    return { ok: false, problems, swap, steps: [] };
+    return { ok: false, problems: [(error as Error).message], moves: 0, score: 0, reshuffles: 0 };
   }
 
-  const matches = steps.filter((step) => step.kind === 'match');
-  const { clearedPerStep } = variant.expect;
-
-  if (matches.length !== clearedPerStep.length) {
-    problems.push(`expected ${clearedPerStep.length} match step(s), got ${matches.length}`);
+  if (findMatches(board.cells).length > 0) {
+    problems.push('generated board contains a match before the first move');
   }
 
-  matches.forEach((step, index) => {
-    const expected = clearedPerStep[index];
-    if (expected === undefined) return;
-    if (step.cleared.length !== expected) {
-      problems.push(`match step ${index} cleared ${step.cleared.length} tiles, expected ${expected}`);
+  let score = 0;
+  let moves = 0;
+  let reshuffles = 0;
+
+  while (!isRunComplete(variant, score, moves) && moves < MAX_SIMULATED_MOVES) {
+    if (!hasLegalMove(board)) {
+      reshuffle(board, rng);
+      reshuffles++;
+      if (!hasLegalMove(board)) {
+        problems.push(`reshuffle at move ${moves} still left no legal move`);
+        break;
+      }
     }
-  });
 
-  if (variant.refills.length !== matches.length) {
-    problems.push(`refill script has ${variant.refills.length} step(s) but the chain runs ${matches.length}`);
+    const swap = bestSwap(board.cells);
+    if (!swap) {
+      problems.push(`no legal swap at move ${moves} despite the deadlock check passing`);
+      break;
+    }
+    let outcome: Resolution;
+    try {
+      outcome = resolve(board, swap, rng, variant.scoring);
+    } catch (error) {
+      problems.push(`move ${moves}: ${(error as Error).message}`);
+      break;
+    }
+
+    if (outcome.points === 0) {
+      problems.push(`move ${moves} was reported legal but scored nothing`);
+      break;
+    }
+
+    score += outcome.points;
+    moves++;
+
+    if (!isFull(board)) {
+      problems.push(`board had holes after move ${moves}`);
+      break;
+    }
+    if (findMatches(board.cells).length > 0) {
+      problems.push(`board still had a match after move ${moves} settled`);
+      break;
+    }
   }
 
-  if (!isFull(board)) {
-    const holes = board.cells.filter((cell) => cell === null).length;
-    problems.push(`board settled with ${holes} hole(s) — refill script is short`);
+  if (score < variant.scoreTarget) {
+    problems.push(`only reached ${score} of ${variant.scoreTarget} in ${moves} moves`);
+  }
+  if (moves < variant.minMoves) {
+    problems.push(`finished in ${moves} moves, below the ${variant.minMoves}-move floor`);
+  }
+  if (moves > variant.expectedMaxMoves) {
+    problems.push(`took ${moves} moves, expected at most ${variant.expectedMaxMoves}`);
   }
 
-  const leftover = findMatches(board.cells);
-  if (leftover.length > 0) {
-    problems.push(`settled board still has ${leftover.length} match(es) — refill creates a chain`);
-  }
-
-  return { ok: problems.length === 0, problems, swap, steps };
+  return { ok: problems.length === 0, problems, moves, score, reshuffles };
 }
 
 /**
  * Dev-only boot guard. Wrapped in import.meta.env.DEV at the call site so the whole
  * verifier tree-shakes out of the shipped single-file ad.
  */
-export function assertSeed(variant: Variant): SeedReport {
-  const report = verifySeed(variant);
+export function assertRun(variant: Variant): RunReport {
+  const report = verifyRun(variant);
 
   if (!report.ok) {
-    throw new Error(`verifySeed("${variant.id}") failed:\n  - ${report.problems.join('\n  - ')}`);
+    throw new Error(`verifyRun("${variant.id}") failed:\n  - ${report.problems.join('\n  - ')}`);
   }
 
   return report;

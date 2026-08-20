@@ -75,8 +75,8 @@ const ADJACENT_PAIRS: readonly Swap[] = (() => {
 })();
 
 /**
- * Every adjacent swap that would create a match. The rigged board is seeded so this
- * returns exactly one — that pair is what the hint pulses and the idle assist plays.
+ * Every adjacent swap that would create a match. Used to validate the player's move and
+ * to tell whether the board still has anything to do; see bestSwap for ranking them.
  */
 export function findValidSwaps(cells: readonly Cell[]): Swap[] {
   const valid: Swap[] = [];
@@ -97,4 +97,32 @@ function swapInPlace(cells: Cell[], swap: Swap): void {
   const held = cells[swap.a];
   cells[swap.a] = cells[swap.b];
   cells[swap.b] = held;
+}
+
+/**
+ * The legal swap that clears the most tiles right away. Cascades depend on refill draws
+ * that haven't happened yet, so immediate clear size is the honest thing to rank on.
+ *
+ * This is the pair the idle hint pulses and points its arrow at, and the move verifyRun
+ * simulates. Merely taking the first swap in scan order suggests the dullest move on the
+ * board, which is a poor advert for the game.
+ */
+export function bestSwap(cells: readonly Cell[]): Swap | null {
+  const scratch = cells.slice();
+  let best: Swap | null = null;
+  let bestCleared = 0;
+
+  for (const pair of ADJACENT_PAIRS) {
+    if (!scratch[pair.a] || !scratch[pair.b]) continue;
+    swapInPlace(scratch, pair);
+    const cleared = clearedIndices(findMatches(scratch)).length;
+    swapInPlace(scratch, pair);
+
+    if (cleared > bestCleared) {
+      bestCleared = cleared;
+      best = pair;
+    }
+  }
+
+  return best;
 }

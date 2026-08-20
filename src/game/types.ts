@@ -51,14 +51,8 @@ export interface Spawn {
   readonly dropFromRow: number;
 }
 
-/**
- * Refill tiles for one resolution step, indexed by column, ordered bottom-first.
- * Scripted, never random — determinism is the whole point of the rig.
- *
- * `null` means "hold the holes open this step": the Classic variant's cascade has to
- * come from falling tiles alone, so nothing drops in until the combo has played.
- */
-export type RefillStep = readonly (readonly TypeId[])[] | null;
+/** Every candy type, for iteration and random choice. */
+export const ALL_TYPES: readonly TypeId[] = [0, 1, 2, 3, 4];
 
 /**
  * The resolution pipeline flattened into an ordered, animatable list. Produced by
@@ -71,7 +65,10 @@ export type Step =
       readonly kind: 'match';
       readonly runs: readonly Run[];
       readonly cleared: readonly GridIndex[];
+      /** 0 is the swap's own match, 1 the first cascade, and so on. */
       readonly comboLevel: number;
+      /** Points this clear is worth, already multiplied by the combo level. */
+      readonly points: number;
     }
   | { readonly kind: 'gravity'; readonly moves: readonly Move[] }
   | { readonly kind: 'refill'; readonly spawns: readonly Spawn[] }

@@ -7,8 +7,7 @@
     "build": "vite build",
     "size": "npm run build && node scripts/size.mjs",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "seed": "node scripts/find-seed.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "gsap": "^3.12.5",

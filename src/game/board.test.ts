@@ -10,138 +10,157 @@ import {
   expandSpecials,
   holesInColumn,
   isFull,
+  replaceAll,
   typeLayout,
 } from './board';
+import { findMatches } from './matcher';
+import { createRng } from './rng';
 import { CELL_COUNT, GRID_COLS, GRID_ROWS, indexOf, type TypeId } from './types';
-import { VARIANT_CLASSIC } from './variants';
 
-const seed = () => [...VARIANT_CLASSIC.seed] as TypeId[];
+// (2*row + col) % 5 — neighbours differ by 1 across a row and by 2 down a column, so the
+// pattern is provably match-free and makes a stable fixture for gravity and refill.
+const BASE_LAYOUT: TypeId[] = Array.from(
+  { length: CELL_COUNT },
+  (_, i) => ((2 * Math.floor(i / GRID_COLS) + (i % GRID_COLS)) % 5) as TypeId,
+);
+
+const board = () => createBoard(BASE_LAYOUT);
 const column = (cells: ReturnType<typeof createBoard>['cells'], col: number) =>
   Array.from({ length: GRID_ROWS }, (_, row) => cells[indexOf(row, col)]?.id ?? null);
 
 describe('createBoard', () => {
-  it('rejects a seed that is not a full grid', () => {
+  it('rejects a layout that is not a full grid', () => {
     expect(() => createBoard([0, 1, 2])).toThrow(/50 tiles/);
   });
 
   it('gives every tile a distinct id', () => {
-    const board = createBoard(seed());
-    const ids = new Set(board.cells.map((cell) => cell!.id));
+    expect(new Set(board().cells.map((cell) => cell!.id)).size).toBe(CELL_COUNT);
+  });
 
-    expect(ids.size).toBe(CELL_COUNT);
+  it('starts from a match-free fixture', () => {
+    expect(findMatches(board().cells)).toEqual([]);
   });
 });
 
 describe('applyGravity', () => {
   it('compacts a column downward while preserving tile order', () => {
-    const board = createBoard(seed());
-    const before = column(board.cells, 2);
+    const b = board();
+    const before = column(b.cells, 2);
 
-    clearCells(board, [indexOf(1, 2)]);
-    applyGravity(board);
+    clearCells(b, [indexOf(1, 2)]);
+    applyGravity(b);
 
-    // The r1 tile is gone, everything above it shifted down one, order intact.
-    expect(column(board.cells, 2)).toEqual([null, before[0], ...before.slice(2)]);
+    expect(column(b.cells, 2)).toEqual([null, before[0], ...before.slice(2)]);
   });
 
   it('reports a move for every tile that actually shifted', () => {
-    const board = createBoard(seed());
-    clearCells(board, [indexOf(GRID_ROWS - 1, 0)]);
+    const b = board();
+    clearCells(b, [indexOf(GRID_ROWS - 1, 0)]);
 
-    const moves = applyGravity(board);
+    const moves = applyGravity(b);
 
-    // Clearing the bottom of a column drops the whole stack above it by one row.
     expect(moves).toHaveLength(GRID_ROWS - 1);
     for (const move of moves) {
       expect(move.to - move.from).toBe(GRID_COLS);
-      expect(board.cells[move.to]!.id).toBe(move.tileId);
+      expect(b.cells[move.to]!.id).toBe(move.tileId);
     }
   });
 
   it('returns no moves when nothing is cleared', () => {
-    expect(applyGravity(createBoard(seed()))).toEqual([]);
-  });
-
-  it('keeps tile ids stable across the fall', () => {
-    const board = createBoard(seed());
-    const survivor = board.cells[indexOf(0, 1)]!.id;
-
-    clearCells(board, [indexOf(3, 1)]);
-    applyGravity(board);
-
-    expect(board.cells[indexOf(1, 1)]!.id).toBe(survivor);
+    expect(applyGravity(board())).toEqual([]);
   });
 
   it('drops a tile the full height of the board', () => {
-    const board = createBoard(seed());
-    const top = board.cells[indexOf(0, 3)]!.id;
+    const b = board();
+    const top = b.cells[indexOf(0, 3)]!.id;
 
-    // Clear all but the top cell of column 3; the survivor must land on the floor.
     clearCells(
-      board,
+      b,
       Array.from({ length: GRID_ROWS - 1 }, (_, row) => indexOf(row + 1, 3)),
     );
-    applyGravity(board);
+    applyGravity(b);
 
-    expect(board.cells[indexOf(GRID_ROWS - 1, 3)]!.id).toBe(top);
-    expect(holesInColumn(board, 3)).toHaveLength(GRID_ROWS - 1);
+    expect(b.cells[indexOf(GRID_ROWS - 1, 3)]!.id).toBe(top);
+    expect(holesInColumn(b, 3)).toHaveLength(GRID_ROWS - 1);
   });
 });
 
 describe('applyRefill', () => {
-  it('fills a column bottom-first and stacks the drop rows above the board', () => {
-    const board = createBoard(seed());
-    clearCells(board, [indexOf(0, 2), indexOf(1, 2)]);
-    applyGravity(board);
+  it('fills every hole and stacks the drop rows above the board', () => {
+    const b = board();
+    const rng = createRng(42);
+    clearCells(b, [indexOf(0, 2), indexOf(1, 2), indexOf(4, 2), indexOf(9, 0)]);
+    applyGravity(b);
 
-    expect(holesInColumn(board, 2)).toEqual([indexOf(1, 2), indexOf(0, 2)]);
+    const holes = holesInColumn(b, 2).length + holesInColumn(b, 0).length;
+    const spawns = applyRefill(b, rng);
 
-    const spawns = applyRefill(board, [[], [], [3, 2], [], []]);
+    expect(spawns).toHaveLength(holes);
+    expect(isFull(b)).toBe(true);
 
-    expect(spawns).toEqual([
-      { tileId: CELL_COUNT, type: 3, to: indexOf(1, 2), dropFromRow: -1 },
-      { tileId: CELL_COUNT + 1, type: 2, to: indexOf(0, 2), dropFromRow: -2 },
-    ]);
-    expect(board.cells[indexOf(1, 2)]!.type).toBe(3);
-    expect(board.cells[indexOf(0, 2)]!.type).toBe(2);
-    expect(isFull(board)).toBe(true);
+    const columnTwo = spawns.filter((s) => s.to % GRID_COLS === 2);
+    // Bottom-first, each subsequent tile queued one row higher off-screen.
+    expect(columnTwo.map((s) => s.dropFromRow)).toEqual([-1, -2, -3]);
   });
 
-  it('throws when the script and the holes disagree', () => {
-    const board = createBoard(seed());
-    clearCells(board, [indexOf(0, 2), indexOf(1, 2)]);
-    applyGravity(board);
+  it('gives refilled tiles fresh ids that never collide with survivors', () => {
+    const b = board();
+    clearCells(b, [indexOf(0, 1), indexOf(1, 1)]);
+    applyGravity(b);
 
-    expect(() => applyRefill(board, [[], [], [3], [], []])).toThrow(
-      /column 2 has 1 tiles but the column has 2 holes/,
-    );
+    const survivors = new Set(b.cells.filter(Boolean).map((cell) => cell!.id));
+    const spawns = applyRefill(b, createRng(7));
+
+    for (const spawn of spawns) expect(survivors.has(spawn.tileId)).toBe(false);
+    expect(new Set(b.cells.map((cell) => cell!.id)).size).toBe(CELL_COUNT);
+  });
+
+  it('is reproducible for a given seed', () => {
+    const run = () => {
+      const b = board();
+      clearCells(b, [indexOf(0, 0), indexOf(0, 1), indexOf(0, 2)]);
+      applyGravity(b);
+      applyRefill(b, createRng(99));
+      return typeLayout(b);
+    };
+
+    expect(run()).toEqual(run());
   });
 });
 
 describe('expandSpecials', () => {
   it('pulls in the whole row of a striped tile caught in the clear', () => {
-    const board = createBoard(seed(), { [indexOf(6, 1)]: 'stripedRow' });
+    const b = createBoard(BASE_LAYOUT, { [indexOf(6, 1)]: 'stripedRow' });
 
-    const expanded = expandSpecials(board, [indexOf(6, 0), indexOf(6, 1)]);
-
-    expect(expanded).toEqual([30, 31, 32, 33, 34]);
+    expect(expandSpecials(b, [indexOf(6, 0), indexOf(6, 1)])).toEqual([30, 31, 32, 33, 34]);
   });
 
   it('leaves an ordinary clear alone', () => {
-    const board = createBoard(seed());
+    expect(expandSpecials(board(), [30, 31, 32])).toEqual([30, 31, 32]);
+  });
+});
 
-    expect(expandSpecials(board, [30, 31, 32])).toEqual([30, 31, 32]);
+describe('replaceAll', () => {
+  it('rewrites every cell with fresh tiles', () => {
+    const b = board();
+    const before = new Set(b.cells.map((cell) => cell!.id));
+
+    const shuffled = [...BASE_LAYOUT].reverse();
+    replaceAll(b, shuffled);
+
+    expect(typeLayout(b)).toEqual(shuffled);
+    for (const cell of b.cells) expect(before.has(cell!.id)).toBe(false);
   });
 });
 
 describe('cloneBoard', () => {
   it('isolates the copy from later mutations', () => {
-    const board = createBoard(seed());
-    const copy = cloneBoard(board);
+    const b = board();
+    const copy = cloneBoard(b);
 
-    applySwap(board, { a: indexOf(5, 1), b: indexOf(5, 2) });
+    applySwap(b, { a: indexOf(5, 1), b: indexOf(5, 2) });
 
-    expect(typeLayout(copy)).toEqual(seed());
-    expect(typeLayout(board)).not.toEqual(seed());
+    expect(typeLayout(copy)).toEqual(BASE_LAYOUT);
+    expect(typeLayout(b)).not.toEqual(BASE_LAYOUT);
   });
 });

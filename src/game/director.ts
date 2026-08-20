@@ -4,12 +4,15 @@ import type { AppContext } from '../core/app';
 import { setupTileInput } from '../core/input';
 import { createParticleBurst } from '../fx/particles';
 import { createTextPops } from '../fx/textPops';
+import { createHud } from '../ui/hud';
 import { startHint, stopHint } from '../ui/hint';
 import { STORE_URL, createCta } from '../ui/cta';
-import { applyStep, cloneBoard, createBoard, type Board } from './board';
+import { applyStep, cloneBoard, type Board } from './board';
 import { playGravity, playRefill, playSettle } from './cascade';
-import { findValidSwaps } from './matcher';
-import { resolve } from './resolve';
+import { generateBoard, hasLegalMove, reshuffle } from './generate';
+import { bestSwap, findValidSwaps } from './matcher';
+import { isRunComplete, resolve } from './resolve';
+import { createRng } from './rng';
 import {
   BOARD_HIT_AREA,
   animateTo,
@@ -28,7 +31,7 @@ import {
   type TileView,
 } from './tiles';
 import { areAdjacent, type GridIndex, type Step, type Swap } from './types';
-import type { Variant } from './variants';
+import { comboBeat, type Variant } from './variants';
 import type { Mraid } from '../core/mraid';
 import gsap from 'gsap';
 
@@ -40,10 +43,12 @@ export interface Director {
 }
 
 export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid): Director {
-  const board: Board = createBoard(variant.seed, variant.specials);
-  const views = spawnBoardViews(board, ctx.layers.tiles);
+  const rng = createRng(variant.rngSeed);
+  const board: Board = generateBoard(rng);
+  let views = spawnBoardViews(board, ctx.layers.tiles);
   const particles = createParticleBurst(ctx.layers.fx);
   const pops = createTextPops(ctx.layers.ui);
+  const hud = createHud(ctx.layers.ui);
   const cta = createCta(ctx.layers.ui, () => mraid.clickthrough(STORE_URL));
   const debug = createDebugOverlay(ctx.layers.debug, () => board);
 
@@ -53,6 +58,9 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   let hintStronger = false;
   let hintCall: gsap.core.Tween | null = null;
   let disposed = false;
+
+  let score = 0;
+  let moves = 0;
 
   drawBoardBackdrop(ctx.layers.boardBg);
   ctx.layers.tiles.hitArea = BOARD_HIT_AREA;
@@ -134,6 +142,10 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     hintViews = [];
   }
 
+  /**
+   * Schedules the idle hint: the best pair breathes and a swipe arrow travels across it.
+   * The hint only ever suggests — the player makes every move.
+   */
   function enterAwaitInput(): void {
     if (disposed) return;
     state = 'AWAIT_INPUT';
@@ -142,7 +154,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
 
     const delayHint = hintStronger ? 0.15 : variant.timing.hintDelay;
     hintCall = gsap.delayedCall(delayHint, () => {
-      const valid = findValidSwaps(board.cells)[0];
+      const valid = bestSwap(board.cells);
       if (!valid || state !== 'AWAIT_INPUT') return;
       const pair = [viewAt(valid.a), viewAt(valid.b)].filter((view): view is TileView => view !== null);
       hintViews = pair;
@@ -167,20 +179,57 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     stopIdle();
     hintStronger = false;
 
+    // Resolve on a copy first so the whole move is decided before any of it is animated,
+    // then replay it step by step onto the live board.
     const planned = cloneBoard(board);
-    const steps = resolve(planned, swap, variant);
+    const { steps, points } = resolve(planned, swap, rng, variant.scoring);
 
+    // Each cascade level plays a little faster than the last, so a long chain builds
+    // momentum rather than making the player wait through it.
+    let level = 0;
     for (const step of steps) {
       if (disposed) return;
-      await playStep(step);
+      if (step.kind === 'match') level = step.comboLevel;
+      await playStep(step, cascadeScale(level));
       applyStep(board, step);
       debug.refresh();
     }
 
-    await finish();
+    score += points;
+    moves++;
+    hud.setScore(score);
+
+    if (disposed) return;
+
+    if (isRunComplete(variant, score, moves)) {
+      await finish();
+      return;
+    }
+
+    if (!hasLegalMove(board)) await playReshuffle();
+    enterAwaitInput();
   }
 
-  async function playStep(step: Step): Promise<void> {
+  /** Rescues a board with no legal moves left, so the player is never stranded. */
+  async function playReshuffle(): Promise<void> {
+    void pops.prompt('No moves — shuffling!', 0.5);
+    await Promise.all(
+      [...views.values()].map((view) => animateTo(view.root, { alpha: 0, duration: 0.22 })),
+    );
+    for (const view of views.values()) destroyTileView(view);
+    views.clear();
+
+    reshuffle(board, rng);
+    views = spawnBoardViews(board, ctx.layers.tiles);
+    await playIntro(views, variant.timing.introStagger * 0.5);
+  }
+
+  function cascadeScale(level: number): number {
+    const { cascadeSpeedup, cascadeSpeedFloor } = variant.timing;
+    return Math.max(cascadeSpeedFloor, 1 - level * cascadeSpeedup);
+  }
+
+  async function playStep(step: Step, scale: number): Promise<void> {
     const { timing } = variant;
 
     switch (step.kind) {
@@ -192,7 +241,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
         return;
       }
       case 'match': {
-        const beat = variant.combos[step.comboLevel];
+        const beat = comboBeat(variant, step.comboLevel);
         if (beat) void pops.combo(beat);
         await Promise.all(
           step.cleared.map(async (index) => {
@@ -201,7 +250,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
             const view = views.get(tile.id);
             if (!view) return;
             particles.burst(view.root.x, view.root.y, paletteOf(tile.type).fill);
-            await playClearPop(view, timing.clear);
+            await playClearPop(view, timing.clear * scale);
             views.delete(tile.id);
             destroyTileView(view);
           }),
@@ -209,19 +258,20 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
         return;
       }
       case 'gravity':
-        await playGravity(views, step.moves, timing.gravity);
+        await playGravity(views, step.moves, timing.gravity * scale);
         return;
       case 'refill':
-        await playRefill(views, ctx.layers.tiles, step.spawns, timing.refill);
+        await playRefill(views, ctx.layers.tiles, step.spawns, timing.refill * scale);
         return;
       case 'settle':
-        await playSettle(timing.settle);
+        await playSettle(timing.settle * scale);
         return;
     }
   }
 
   async function finish(): Promise<void> {
     state = 'COMPLETE';
+    stopIdle();
     await animateTo(ctx.world, { alpha: 0.58, duration: 0.25 });
     void pops.complete(variant.completionText);
     await waitFor(variant.timing.completeHold);
@@ -230,6 +280,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   }
 
   async function start(): Promise<void> {
+    hud.setScore(0);
     await playIntro(views, variant.timing.introStagger);
     if (disposed) return;
     void pops.prompt('Make a match!', variant.timing.promptHold);
@@ -246,6 +297,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
       debug.dispose();
       particles.dispose();
       pops.dispose();
+      hud.dispose();
       cta.dispose();
     },
   };

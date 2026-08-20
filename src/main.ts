@@ -2,17 +2,20 @@ import { createApp } from './core/app';
 import { setupMraid } from './core/mraid';
 import { setupResize } from './core/resize';
 import { createDirector } from './game/director';
-import { assertSeed } from './game/resolve';
+import { assertRun } from './game/resolve';
 import { selectVariant } from './game/variants';
 
 async function main(): Promise<void> {
   const variant = selectVariant(window.location.search);
 
   if (import.meta.env.DEV) {
-    // The rig is only as good as its seed. Fail the boot loudly if the seed and the
-    // resolution pipeline ever disagree, rather than letting it misfire mid-cascade.
-    const { steps } = assertSeed(variant);
-    console.info(`[sweet-swap] seed "${variant.id}" verified — ${steps.length} resolution steps`);
+    // Simulate the whole run before showing anything. A seed that cannot reach the score
+    // goal, or that dead-ends, must fail the boot rather than strand a player.
+    const { moves, score, reshuffles } = assertRun(variant);
+    console.info(
+      `[sweet-swap] run "${variant.id}" verified — solvable in ${moves} moves ` +
+        `for ${score} pts (${reshuffles} reshuffles)`,
+    );
   }
 
   const ctx = await createApp();

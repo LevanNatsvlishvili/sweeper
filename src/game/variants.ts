@@ -1,11 +1,19 @@
-// VARIANT configs: seed, refill script, combo beats, timing. One object per ad variant.
-
-import type { GridIndex, RefillStep, Special, TypeId } from './types';
+// VARIANT configs: rng seed, score goal, combo beats, timing. One object per ad variant.
 
 export interface ComboBeat {
   readonly text: string;
   readonly scale: number;
   readonly tint: number;
+}
+
+export interface Scoring {
+  /** Base points per cleared tile, before the combo multiplier. */
+  readonly perTile: number;
+  /**
+   * Ceiling on the cascade multiplier. Uncapped, a lucky runaway chain can clear the
+   * whole goal in one move and end the ad before the player has engaged with it.
+   */
+  readonly maxMultiplier: number;
 }
 
 /** All durations in seconds (GSAP's unit). Tuned on device during the juice pass. */
@@ -16,8 +24,6 @@ export interface Timing {
   readonly promptHold: number;
   /** Idle time before the hint pulse starts. */
   readonly hintDelay: number;
-  /** Idle time before the assist plays the swap itself. */
-  readonly assistDelay: number;
   /** The tension beat — tiles hesitate mid-swap as if it might not work. */
   readonly wobble: number;
   readonly swapSnap: number;
@@ -25,101 +31,85 @@ export interface Timing {
   readonly gravity: number;
   readonly refill: number;
   readonly settle: number;
+  /**
+   * Fraction knocked off each animation per cascade level, so a long chain accelerates
+   * instead of dragging. At a flat rate a five-deep chain took over eight seconds on its
+   * own, which is most of an ad's attention budget spent watching one move.
+   */
+  readonly cascadeSpeedup: number;
+  /** Floor on that ramp, so a very deep chain stays readable rather than blurring past. */
+  readonly cascadeSpeedFloor: number;
   readonly completeHold: number;
   readonly ctaSlide: number;
 }
 
-/**
- * What verifySeed() must observe when the rigged swap is played out. Encoding the
- * expected shape here rather than hard-coding "one match of three" is what lets the
- * Cascade variant reuse the same verifier for a row-clear plus a 3-chain.
- */
-export interface SeedExpectation {
-  /** Tile count cleared at each match step, in order. Length = number of match steps. */
-  readonly clearedPerStep: readonly number[];
-}
-
 export interface Variant {
   readonly id: 'classic' | 'cascade';
-  /** CELL_COUNT entries, row-major, row 0 at the top. */
-  readonly seed: readonly TypeId[];
-  readonly specials?: Readonly<Record<GridIndex, Special>>;
-  /** One entry per resolution step. An all-empty step means "no refill yet". */
-  readonly refills: readonly RefillStep[];
-  /** Indexed by combo level: 0 is the swap's own match, 1 the first cascade, and so on. */
-  readonly combos: readonly ComboBeat[];
+  /** Seeds every random draw, so a whole run replays identically from this number. */
+  readonly rngSeed: number;
+  /** Score that ends the ad. Deliberately not shown to the player as a progress bar. */
+  readonly scoreTarget: number;
+  /**
+   * The CTA cannot fire before this many moves, however well the player does. Without it
+   * roughly one run in ten ended on move two off a lucky chain, before the player had
+   * engaged at all. Invisible to the player, since no progress is displayed.
+   */
+  readonly minMoves: number;
+  /** Upper bound verifyRun() holds its simulated playthrough to, as a pacing guard. */
+  readonly expectedMaxMoves: number;
+  readonly scoring: Scoring;
+  /**
+   * Indexed by combo level. `null` means "no pop" — a plain match should not shout, so
+   * only actual cascades get text and the screen stays calm between chains.
+   * Levels past the end reuse the last entry.
+   */
+  readonly combos: readonly (ComboBeat | null)[];
   readonly completionText: string;
   readonly finale: 'stars' | 'coinRain';
-  readonly expect: SeedExpectation;
   readonly timing: Timing;
 }
 
 const CLASSIC_TIMING: Timing = {
-  // Longer intro and a fuller finale put the hands-free idle run at ~13.1s, inside
-  // the 12-16s window with headroom on both sides.
   introStagger: 1.2,
   promptHold: 0.8,
   hintDelay: 2.0,
-  assistDelay: 8.0,
   wobble: 0.3,
   swapSnap: 0.2,
-  clear: 0.45,
-  gravity: 0.5,
-  refill: 0.6,
-  settle: 0.3,
-  completeHold: 2.0,
+  clear: 0.36,
+  gravity: 0.42,
+  refill: 0.46,
+  settle: 0.26,
+  cascadeSpeedup: 0.16,
+  cascadeSpeedFloor: 0.55,
+  completeHold: 1.5,
   ctaSlide: 0.6,
 };
 
-/**
- * Found by scripts/find-seed.mjs and locked in. The full chain on the 10x5 board:
- *
- *   r0  4 2 4 3 3
- *   r1  1 1 4 4 2
- *   r2  3 3 0 2 2
- *   r3  2 2 0 0 4    swap r5c1 <-> r5c2 makes row 5 read 4 4 1 1 1
- *   r4  2 1 4 3 3    match 1: r5c2..r5c4 type 1
- *   r5  4 1 4 1 1 <- clear + gravity drops row 5 to 4 4 4 3 3
- *   r6  4 2 2 1 4    match 2: r5c0..r5c2 type 4  -> "SWEET! x2"
- *   r7  0 0 3 3 2    clear + gravity leaves 6 holes, refill settles to zero matches
- *   r8  1 4 3 0 0
- *   r9  3 4 1 0 1
- *
- * The two matches between them touch all five columns, so every column shows a fall.
- * This is the ONLY swap of the 85 adjacent pairs that matches anything. Don't hand-edit
- * a cell here — re-run the search tool, because every downstream step depends on it.
- */
 export const VARIANT_CLASSIC: Variant = {
   id: 'classic',
-  // prettier-ignore
-  seed: [
-    4, 2, 4, 3, 3,
-    1, 1, 4, 4, 2,
-    3, 3, 0, 2, 2,
-    2, 2, 0, 0, 4,
-    2, 1, 4, 3, 3,
-    4, 1, 4, 1, 1,
-    4, 2, 2, 1, 4,
-    0, 0, 3, 3, 2,
-    1, 4, 3, 0, 0,
-    3, 4, 1, 0, 1,
-  ],
-  refills: [
-    // Step 0 is null on purpose: the cascade has to come from falling tiles alone, so
-    // the holes stay open until the combo has played.
-    null,
-    // Step 1, per column, bottom-first. Column 2 has two holes (r1c2 then r0c2).
-    [[1], [4], [2, 2], [2], [1]],
-  ],
+  // Chosen with verifyRun: finishes hands-free in 4 moves with a big chain on the way.
+  rngSeed: 18,
+  scoreTarget: 800,
+  minMoves: 3,
+  expectedMaxMoves: 15,
+  scoring: { perTile: 20, maxMultiplier: 4 },
   combos: [
-    { text: 'SWEET!', scale: 1.0, tint: 0xffd166 },
-    { text: 'SWEET! x2', scale: 1.28, tint: 0xff8c42 },
+    null,
+    { text: 'SWEET! x2', scale: 1.15, tint: 0xffd166 },
+    { text: 'x3 COMBO!', scale: 1.3, tint: 0xff8c42 },
+    { text: 'x4 BLAZING!', scale: 1.45, tint: 0xff5c39 },
+    { text: 'JACKPOT!', scale: 1.6, tint: 0xff3b6b },
   ],
   completionText: 'LEVEL COMPLETE!',
   finale: 'stars',
-  expect: { clearedPerStep: [3, 3] },
   timing: CLASSIC_TIMING,
 };
+
+/** Combo text for a cascade level, holding the last beat for anything deeper. */
+export function comboBeat(variant: Variant, level: number): ComboBeat | null {
+  if (level < variant.combos.length) return variant.combos[level];
+  return variant.combos[variant.combos.length - 1];
+}
 
 export const VARIANTS: Readonly<Record<string, Variant>> = {
   classic: VARIANT_CLASSIC,

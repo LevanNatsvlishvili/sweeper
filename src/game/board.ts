@@ -1,6 +1,7 @@
 // Pure-data 10x5 grid state and step-boundary mutations.
 
 import {
+  ALL_TYPES,
   CELL_COUNT,
   GRID_COLS,
   GRID_ROWS,
@@ -9,7 +10,6 @@ import {
   type Cell,
   type GridIndex,
   type Move,
-  type RefillStep,
   type Spawn,
   type Special,
   type Step,
@@ -17,6 +17,7 @@ import {
   type Tile,
   type TypeId,
 } from './types';
+import type { Rng } from './rng';
 
 export interface Board {
   readonly cells: Cell[];
@@ -105,33 +106,32 @@ export function applyGravity(board: Board): Move[] {
   return moves;
 }
 
-/**
- * Fills this step's holes from the scripted refill. Throws on any count mismatch —
- * a refill script that has drifted from the seed must fail loudly at boot, not
- * silently drop a tile somewhere in the middle of a cascade.
- */
-export function applyRefill(board: Board, step: NonNullable<RefillStep>): Spawn[] {
+/** Drops fresh tiles into every hole, bottom-first per column, from the seeded stream. */
+export function applyRefill(board: Board, rng: Rng): Spawn[] {
   const spawns: Spawn[] = [];
 
   for (let col = 0; col < GRID_COLS; col++) {
     const holes = holesInColumn(board, col);
-    const scripted = step[col] ?? [];
-
-    if (scripted.length !== holes.length) {
-      throw new Error(
-        `refill script for column ${col} has ${scripted.length} tiles but the column has ${holes.length} holes`,
-      );
-    }
 
     holes.forEach((to, order) => {
-      const tile: Tile = { id: board.nextTileId++, type: scripted[order], special: 'none' };
+      // Freely random: a refill that happens to complete a run is where the big chains
+      // come from, and chains are the whole appeal. MAX_CASCADE_DEPTH bounds the runaway.
+      const type = ALL_TYPES[rng.int(ALL_TYPES.length)];
+      const tile: Tile = { id: board.nextTileId++, type, special: 'none' };
       board.cells[to] = tile;
       // Stack the incoming tiles above the board in fall order: -1, -2, -3...
-      spawns.push({ tileId: tile.id, type: tile.type, to, dropFromRow: -1 - order });
+      spawns.push({ tileId: tile.id, type, to, dropFromRow: -1 - order });
     });
   }
 
   return spawns;
+}
+
+/** Rewrites the whole grid — used by the reshuffle that rescues a dead board. */
+export function replaceAll(board: Board, layout: readonly TypeId[]): void {
+  for (let index = 0; index < CELL_COUNT; index++) {
+    board.cells[index] = { id: board.nextTileId++, type: layout[index], special: 'none' };
+  }
 }
 
 /** Holes in a column, bottom-first. After gravity they are always contiguous at the top. */

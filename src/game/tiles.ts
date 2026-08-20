@@ -24,7 +24,8 @@ import type { Board } from './board';
  * prompt line and at the bottom for the CTA slide-up.
  */
 const BOARD_MARGIN_X = 40;
-const BOARD_RESERVE_TOP = 120;
+/** Room for the score readout and the opening prompt above the board. */
+const BOARD_RESERVE_TOP = 150;
 /**
  * Must clear the raised CTA panel, which parks at DESIGN_HEIGHT - PANEL_HEIGHT - 36.
  * Keep in step with PANEL_HEIGHT in ui/cta.ts: 168 panel + 36 margin + 14 gap + 22 well pad.

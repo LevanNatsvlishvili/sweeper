@@ -43,7 +43,26 @@ export interface Director {
   dispose: () => void;
 }
 
-export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid): Director {
+export interface DirectorOptions {
+  /**
+   * Capture-only auto-play. Off in the shipped ad: if nobody touches the board, it
+   * sits on the opening hint forever. `npm run capture` passes `?assist=1`.
+   */
+  readonly idleAssist?: boolean;
+}
+
+/** First idle: hint at 2s, then play once the arrow has travelled once. */
+const ASSIST_OPEN_DELAY = 3.0;
+/** Later idles stay short so a 15s reel actually reaches the CTA. */
+const ASSIST_NEXT_DELAY = 1.1;
+
+export function createDirector(
+  ctx: AppContext,
+  variant: Variant,
+  mraid: Mraid,
+  options: DirectorOptions = {},
+): Director {
+  const idleAssist = options.idleAssist === true;
   const rng = createRng(variant.rngSeed);
   const board: Board = generateBoard(rng);
   let views = spawnBoardViews(board, ctx.layers.tiles);
@@ -57,6 +76,7 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
   let selected: GridIndex | null = null;
   let hintViews: TileView[] = [];
   let hintCall: gsap.core.Tween | null = null;
+  let assistCall: gsap.core.Tween | null = null;
   /** Hint is opening-only. Any swap attempt (legal or not) retires it for the rest of the run. */
   let hintUsed = false;
   let disposed = false;
@@ -140,13 +160,31 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
 
   function stopIdle(): void {
     hintCall?.kill();
+    assistCall?.kill();
     hintCall = null;
+    assistCall = null;
     stopHint(hintViews);
     hintViews = [];
   }
 
+  function hintedPair(): TileView[] {
+    const valid = bestSwap(board.cells);
+    if (!valid) return [];
+    return [viewAt(valid.a), viewAt(valid.b)].filter((view): view is TileView => view !== null);
+  }
+
+  function showHint(): void {
+    if (state !== 'AWAIT_INPUT') return;
+    if (!idleAssist && hintUsed) return;
+    const pair = hintedPair();
+    if (pair.length < 2) return;
+    hintViews = pair;
+    startHint(pair, false, ctx.layers.fx);
+  }
+
   /**
-   * Opening hint only. After the player has attempted any swap, this is a no-op.
+   * Opening hint only — unless capture assist is on, in which case the hint and the
+   * auto-swap keep firing after every settle so the reel is not a still frame.
    */
   function enterAwaitInput(): void {
     if (disposed) return;
@@ -154,15 +192,19 @@ export function createDirector(ctx: AppContext, variant: Variant, mraid: Mraid):
     debug.refresh();
     stopIdle();
 
-    if (hintUsed) return;
+    if (!idleAssist && hintUsed) return;
 
-    hintCall = gsap.delayedCall(variant.timing.hintDelay, () => {
-      if (hintUsed || state !== 'AWAIT_INPUT') return;
+    const delayHint = idleAssist && hintUsed ? 0.12 : variant.timing.hintDelay;
+    hintCall = gsap.delayedCall(delayHint, showHint);
+
+    if (!idleAssist) return;
+
+    const delayAssist = hintUsed ? ASSIST_NEXT_DELAY : ASSIST_OPEN_DELAY;
+    assistCall = gsap.delayedCall(delayAssist, () => {
+      if (state !== 'AWAIT_INPUT') return;
       const valid = bestSwap(board.cells);
       if (!valid) return;
-      const pair = [viewAt(valid.a), viewAt(valid.b)].filter((view): view is TileView => view !== null);
-      hintViews = pair;
-      startHint(pair, false, ctx.layers.fx);
+      void trySwap(valid.a, valid.b);
     });
   }
 

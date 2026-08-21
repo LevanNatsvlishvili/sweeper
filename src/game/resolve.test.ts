@@ -6,7 +6,7 @@ import { bestSwap, findMatches, findValidSwaps } from './matcher';
 import { assertRun, isRunComplete, resolve, verifyRun } from './resolve';
 import { createRng } from './rng';
 import { CELL_COUNT, GRID_COLS, indexOf, type Step, type TypeId } from './types';
-import { selectVariant, VARIANT_CASCADE, VARIANT_CLASSIC, type Variant } from './variants';
+import { selectVariant, VARIANT_CASCADE, VARIANT_CLASSIC, wantsIdleAssist, type Variant } from './variants';
 
 const SEEDS = [1, 2, 3, 17, 404, 20260820];
 const matchSteps = (steps: readonly Step[]) =>
@@ -278,6 +278,14 @@ describe('selectVariant', () => {
   it('falls back to classic for anything unrecognised', () => {
     expect(selectVariant('?variant=nope')).toBe(VARIANT_CLASSIC);
     expect(selectVariant('')).toBe(VARIANT_CLASSIC);
+  });
+});
+
+describe('wantsIdleAssist', () => {
+  it('is off unless capture explicitly opts in', () => {
+    expect(wantsIdleAssist('?variant=cascade')).toBe(false);
+    expect(wantsIdleAssist('?assist=1')).toBe(true);
+    expect(wantsIdleAssist('?variant=classic&assist=1')).toBe(true);
   });
 });
 

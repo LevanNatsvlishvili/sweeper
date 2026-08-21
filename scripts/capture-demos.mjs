@@ -3,6 +3,9 @@
  * Requires Playwright — installed on first run via npx.
  *
  * Usage: npm run portfolio && npm run capture
+ *
+ * Loads the playable with `?assist=1` so idle assist auto-plays after the hint.
+ * The shipped ad never sets that flag.
  */
 
 import fs from 'node:fs';
@@ -53,7 +56,7 @@ async function main() {
     });
     const page = await context.newPage();
 
-    await page.goto(`${playableUrl}?variant=${variant.id}`, { waitUntil: 'load' });
+    await page.goto(`${playableUrl}?variant=${variant.id}&assist=1`, { waitUntil: 'load' });
     await page.waitForTimeout(CAPTURE_MS);
 
     const video = page.video();

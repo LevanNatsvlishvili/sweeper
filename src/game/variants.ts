@@ -152,3 +152,11 @@ export function selectVariant(search: string): Variant {
   const requested = new URLSearchParams(search).get('variant');
   return (requested && VARIANTS[requested]) || VARIANT_CLASSIC;
 }
+
+/**
+ * Capture-only. The shipped ad never auto-plays; `?assist=1` is what lets the
+ * portfolio reel drive itself after the hint, the way idle assist used to.
+ */
+export function wantsIdleAssist(search: string): boolean {
+  return new URLSearchParams(search).get('assist') === '1';
+}

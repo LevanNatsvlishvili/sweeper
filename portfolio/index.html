@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sweet Swap — Playable Ad Portfolio</title>
     <style>
       :root {
@@ -13,8 +13,8 @@
         --muted: #a8927e;
         --gold: #ffd166;
         --jackpot: #ff3b6b;
-        --phone-w: 360px;
-        --phone-h: 640px;
+        --phone-max: 360px;
+        --phone-ratio: 9 / 16;
       }
 
       * {
@@ -23,8 +23,14 @@
         padding: 0;
       }
 
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
       body {
         min-height: 100vh;
+        min-height: 100dvh;
+        overflow-x: hidden;
         font-family: 'Segoe UI', system-ui, sans-serif;
         color: var(--text);
         background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 209, 102, 0.12), transparent),
@@ -35,16 +41,17 @@
       .wrap {
         width: min(1080px, 100%);
         margin: 0 auto;
-        padding: 2.5rem 1.25rem 4rem;
+        padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+          max(2rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
       }
 
       header {
         text-align: center;
-        margin-bottom: 2.5rem;
+        margin-bottom: 1.5rem;
       }
 
       header h1 {
-        font-size: clamp(2rem, 5vw, 2.75rem);
+        font-size: clamp(1.75rem, 6vw, 2.75rem);
         font-weight: 800;
         letter-spacing: -0.03em;
       }
@@ -52,18 +59,27 @@
       header p {
         margin-top: 0.5rem;
         color: var(--muted);
-        font-size: 1.05rem;
+        font-size: clamp(0.9rem, 2.5vw, 1.05rem);
       }
 
       .hero {
         display: grid;
-        gap: 2.5rem;
+        gap: 1.75rem;
         align-items: start;
       }
 
       @media (min-width: 900px) {
+        .wrap {
+          padding: 2.5rem 1.25rem 4rem;
+        }
+
+        header {
+          margin-bottom: 2.5rem;
+        }
+
         .hero {
           grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+          gap: 2.5rem;
         }
       }
 
@@ -72,10 +88,15 @@
         flex-direction: column;
         align-items: center;
         gap: 1rem;
+        width: 100%;
+        min-width: 0;
       }
 
       .variant-toggle {
         display: inline-flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 100%;
         padding: 4px;
         border-radius: 999px;
         background: var(--panel);
@@ -110,10 +131,13 @@
 
       .phone {
         position: relative;
-        width: var(--phone-w);
-        height: var(--phone-h);
-        padding: 12px;
-        border-radius: 36px;
+        display: grid;
+        width: min(var(--phone-max), 100%, calc((100dvh - 8rem) * 9 / 16));
+        aspect-ratio: var(--phone-ratio);
+        height: auto;
+        padding: clamp(8px, 2.4vw, 12px);
+        border-radius: clamp(22px, 8vw, 36px);
+        overflow: hidden;
         background: linear-gradient(160deg, #2a201c, #120c0a);
         border: 2px solid #4a3830;
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -122,42 +146,40 @@
       .phone::before {
         content: '';
         position: absolute;
-        top: 10px;
+        top: clamp(6px, 1.6vw, 10px);
         left: 50%;
         transform: translateX(-50%);
-        width: 84px;
-        height: 22px;
+        width: 22%;
+        max-width: 84px;
+        height: 3.4%;
+        max-height: 22px;
         border-radius: 999px;
         background: #0a0706;
         z-index: 2;
       }
 
       .phone-screen {
+        display: block;
         width: 100%;
         height: 100%;
         border: 0;
-        border-radius: 26px;
+        border-radius: clamp(16px, 6vw, 26px);
         overflow: hidden;
         background: #140e0c;
-      }
-
-      .demo-caption {
-        max-width: 22rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.92rem;
       }
 
       .side {
         display: grid;
         gap: 1.5rem;
+        min-width: 0;
       }
 
       .card {
         background: rgba(26, 18, 16, 0.92);
         border: 1px solid var(--line);
         border-radius: 18px;
-        padding: 1.35rem 1.4rem;
+        padding: clamp(1rem, 3vw, 1.4rem);
+        overflow-wrap: anywhere;
       }
 
       .card h2 {
@@ -205,8 +227,28 @@
 
       .stat dd {
         margin-top: 0.25rem;
-        font-size: 1.15rem;
+        font-size: clamp(0.95rem, 3.5vw, 1.15rem);
         font-weight: 700;
+      }
+
+      .play-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.25rem;
+        padding: 0.75rem 1.2rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--gold), #ffb347);
+        color: #1a0f08;
+        font-weight: 800;
+        font-size: 0.95rem;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        box-shadow: 0 4px 16px rgba(255, 209, 102, 0.35);
+      }
+
+      .play-link:hover {
+        filter: brightness(1.06);
       }
 
       footer {
@@ -214,6 +256,19 @@
         text-align: center;
         color: var(--muted);
         font-size: 0.85rem;
+      }
+
+      @media (max-width: 420px) {
+        .variant-toggle button {
+          font-size: 0.82rem;
+          padding: 0.55rem 0.85rem;
+        }
+      }
+
+      @media (max-height: 700px) and (orientation: landscape) {
+        .phone {
+          width: min(var(--phone-max), 42vw, calc((100dvh - 4rem) * 9 / 16));
+        }
       }
     </style>
   </head>
@@ -225,6 +280,7 @@
 
       <section class="hero">
         <div class="demo-panel">
+          <a class="play-link" href="playable.html">Open fullscreen ad</a>
           <div class="phone">
             <iframe
               id="ad"
@@ -281,10 +337,14 @@
       function applyStats(stats) {
         if (!stats) return;
         const pct = stats.budgetPct ?? ((stats.gzipBytes / (2.5 * 1024 * 1024)) * 100).toFixed(1);
-        document.getElementById('stat-gzip').textContent = `${stats.gzipKb} KB`;
-        document.getElementById('stat-raw').textContent = `${stats.rawKb} KB`;
-        document.getElementById('stat-budget').textContent = `${pct}% of 2.5 MB`;
-        document.getElementById('stat-date').textContent = new Date(stats.generatedAt).toLocaleDateString();
+        const gzip = document.getElementById('stat-gzip');
+        const raw = document.getElementById('stat-raw');
+        const budget = document.getElementById('stat-budget');
+        const date = document.getElementById('stat-date');
+        if (gzip) gzip.textContent = `${stats.gzipKb} KB`;
+        if (raw) raw.textContent = `${stats.rawKb} KB`;
+        if (budget) budget.textContent = `${pct}% of 2.5 MB`;
+        if (date) date.textContent = new Date(stats.generatedAt).toLocaleDateString();
       }
 
       async function loadStats() {

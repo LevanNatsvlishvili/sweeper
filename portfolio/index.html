@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -25,12 +25,10 @@
 
       body {
         min-height: 100vh;
-        font-family: "Segoe UI", system-ui, sans-serif;
+        font-family: 'Segoe UI', system-ui, sans-serif;
         color: var(--text);
-        background:
-          radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 209, 102, 0.12), transparent),
-          radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 59, 107, 0.08), transparent),
-          var(--bg);
+        background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 209, 102, 0.12), transparent),
+          radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 59, 107, 0.08), transparent), var(--bg);
         line-height: 1.55;
       }
 
@@ -104,7 +102,7 @@
         box-shadow: 0 4px 16px rgba(255, 209, 102, 0.35);
       }
 
-      .variant-toggle button[data-variant="cascade"].active {
+      .variant-toggle button[data-variant='cascade'].active {
         color: #fff;
         background: linear-gradient(135deg, var(--jackpot), #ff8c42);
         box-shadow: 0 4px 16px rgba(255, 59, 107, 0.35);
@@ -118,13 +116,11 @@
         border-radius: 36px;
         background: linear-gradient(160deg, #2a201c, #120c0a);
         border: 2px solid #4a3830;
-        box-shadow:
-          0 24px 60px rgba(0, 0, 0, 0.55),
-          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
 
       .phone::before {
-        content: "";
+        content: '';
         position: absolute;
         top: 10px;
         left: 50%;
@@ -213,71 +209,6 @@
         font-weight: 700;
       }
 
-      .captures {
-        margin-top: 3rem;
-      }
-
-      .captures h2 {
-        text-align: center;
-        font-size: 1.35rem;
-        margin-bottom: 1.25rem;
-      }
-
-      .capture-grid {
-        display: grid;
-        gap: 1.25rem;
-      }
-
-      @media (min-width: 760px) {
-        .capture-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      figure {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        overflow: hidden;
-      }
-
-      figcaption {
-        padding: 0.85rem 1rem;
-        font-weight: 700;
-        border-top: 1px solid var(--line);
-      }
-
-      video {
-        display: block;
-        width: 100%;
-        aspect-ratio: 9 / 16;
-        object-fit: cover;
-        background: #140e0c;
-      }
-
-      .capture-placeholder {
-        display: grid;
-        place-items: center;
-        aspect-ratio: 9 / 16;
-        padding: 1.5rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.9rem;
-        background:
-          linear-gradient(180deg, rgba(255, 209, 102, 0.04), transparent),
-          #140e0c;
-      }
-
-      .capture-placeholder code {
-        display: block;
-        margin-top: 0.75rem;
-        padding: 0.45rem 0.6rem;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.35);
-        color: var(--gold);
-        font-size: 0.82rem;
-      }
-
       footer {
         margin-top: 3rem;
         text-align: center;
@@ -289,52 +220,30 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>Sweet Swap</h1>
-        <p>10×5 match-3 playable ad · one engine, two variants</p>
+        <h1>Sweeper</h1>
       </header>
 
       <section class="hero">
         <div class="demo-panel">
-          <div class="variant-toggle" role="tablist" aria-label="Ad variant">
-            <button type="button" role="tab" data-variant="cascade" class="active" aria-selected="true">
-              Cascade Jackpot
-            </button>
-            <button type="button" role="tab" data-variant="classic" aria-selected="false">
-              Classic Swap
-            </button>
-          </div>
-
           <div class="phone">
             <iframe
               id="ad"
               class="phone-screen"
               title="Sweet Swap playable ad"
-              src="playable.html?variant=cascade"
+              src="playable.html"
               sandbox="allow-scripts allow-same-origin"
             ></iframe>
           </div>
-
-          <p class="demo-caption">
-            Same single-file build, different <code>Variant</code> config — striped row clears,
-            hotter combo copy, coin-rain finale on Cascade.
-          </p>
         </div>
 
         <div class="side">
           <article class="card">
             <h2>Build notes</h2>
-            <p>
-              Free-play on a seeded PRNG, not a scripted board. A headless
-              <code>verifyRun()</code> simulates a competent player at dev boot and asserts
-              every seed is completable — goal reached, never dead-ended, board settled after
-              every move.
-            </p>
+            <p>Inspired from Candy Crush, built as one HTML file for mobile ad networks.</p>
             <ul>
-              <li>Pure-data engine: matcher, board, and <code>resolve()</code> are unit-tested with zero Pixi imports</li>
-              <li>One <code>resolve()</code> pipeline replayed by the director — clone, animate, <code>applyStep</code></li>
               <li>Single-file Vite output, zero runtime network requests, MRAID viewability + pause/resume</li>
-              <li>Variant system: Classic stars + 800 goal; Cascade stripes, 1400 goal, JACKPOT + coin rain</li>
-              <li>Procedural PIXI.Graphics candies — no image assets, colourblind-safe shape + colour pairs</li>
+              <li>Procedural PIXI.Graphics candies — no image assets</li>
+              <li>Under ~7% of a typical 2.5 MB ad-size budget</li>
             </ul>
 
             <dl class="stats" id="stats">
@@ -346,55 +255,10 @@
                 <dt>Raw size</dt>
                 <dd id="stat-raw">—</dd>
               </div>
-              <div class="stat">
-                <dt>Budget used</dt>
-                <dd id="stat-budget">—</dd>
-              </div>
-              <div class="stat">
-                <dt>Built</dt>
-                <dd id="stat-date">—</dd>
-              </div>
             </dl>
           </article>
-
-          <article class="card">
-            <h2>Variant specs</h2>
-            <ul>
-              <li><strong>Classic</strong> — seed 18, 800 pts / 3-move floor, star burst, opening hint arrow</li>
-              <li><strong>Cascade</strong> — seed 183, 1400 pts / 4-move floor, 4-match striped leftovers, row clears</li>
-            </ul>
-            <p style="margin-top: 0.75rem; color: var(--muted); font-size: 0.92rem">
-              Toggle above reloads the iframe with <code>?variant=</code> — no second build, no engine fork.
-            </p>
-          </article>
         </div>
       </section>
-
-      <section class="captures">
-        <h2>15s captures</h2>
-        <div class="capture-grid">
-          <figure>
-            <div class="capture-slot" data-src="cascade.webm" data-label="Cascade Jackpot">
-              <div class="capture-placeholder">
-                Cascade reel placeholder
-                <code>npm run capture</code>
-              </div>
-            </div>
-            <figcaption>Cascade Jackpot — reel opener</figcaption>
-          </figure>
-          <figure>
-            <div class="capture-slot" data-src="classic.webm" data-label="Classic Swap">
-              <div class="capture-placeholder">
-                Classic reel placeholder
-                <code>npm run capture</code>
-              </div>
-            </div>
-            <figcaption>Classic Swap</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <footer>Serve this folder after <code>npm run portfolio</code> — e.g. <code>npx serve portfolio</code></footer>
     </div>
 
     <script src="build-stats.js"></script>
@@ -437,35 +301,7 @@
         }
       }
 
-      function wireCaptures() {
-        document.querySelectorAll('.capture-slot').forEach((slot) => {
-          const src = slot.dataset.src;
-          const video = document.createElement('video');
-          video.src = src;
-          video.controls = true;
-          video.playsInline = true;
-          video.loop = true;
-          video.muted = true;
-          video.addEventListener(
-            'loadeddata',
-            () => {
-              slot.replaceChildren(video);
-            },
-            { once: true },
-          );
-          video.addEventListener(
-            'error',
-            () => {
-              /* keep placeholder until npm run capture produces the file */
-            },
-            { once: true },
-          );
-          video.load();
-        });
-      }
-
       loadStats();
-      wireCaptures();
     </script>
   </body>
 </html>

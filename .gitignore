@@ -12,7 +12,9 @@ dist
 dist-ssr
 portfolio/playable.html
 portfolio/build-stats.json
-portfolio/demo.mp4
+portfolio/cascade.webm
+portfolio/classic.webm
+portfolio/.capture-tmp
 *.local
 
 .cursor

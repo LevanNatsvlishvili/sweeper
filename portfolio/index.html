@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sweet Swap — Playable Ad Portfolio</title>
+    <style>
+      :root {
+        --bg: #0f0a08;
+        --panel: #1a1210;
+        --line: #3a2a22;
+        --text: #f5e6d3;
+        --muted: #a8927e;
+        --gold: #ffd166;
+        --jackpot: #ff3b6b;
+        --phone-w: 360px;
+        --phone-h: 640px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 209, 102, 0.12), transparent),
+          radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 59, 107, 0.08), transparent),
+          var(--bg);
+        line-height: 1.55;
+      }
+
+      .wrap {
+        width: min(1080px, 100%);
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      header h1 {
+        font-size: clamp(2rem, 5vw, 2.75rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      header p {
+        margin-top: 0.5rem;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      .hero {
+        display: grid;
+        gap: 2.5rem;
+        align-items: start;
+      }
+
+      @media (min-width: 900px) {
+        .hero {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+        }
+      }
+
+      .demo-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .variant-toggle {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      .variant-toggle button {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 0.92rem;
+        font-weight: 700;
+        padding: 0.65rem 1.15rem;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: color 0.18s, background 0.18s, box-shadow 0.18s;
+      }
+
+      .variant-toggle button.active {
+        color: #1a0f08;
+        background: linear-gradient(135deg, var(--gold), #ffb347);
+        box-shadow: 0 4px 16px rgba(255, 209, 102, 0.35);
+      }
+
+      .variant-toggle button[data-variant="cascade"].active {
+        color: #fff;
+        background: linear-gradient(135deg, var(--jackpot), #ff8c42);
+        box-shadow: 0 4px 16px rgba(255, 59, 107, 0.35);
+      }
+
+      .phone {
+        position: relative;
+        width: var(--phone-w);
+        height: var(--phone-h);
+        padding: 12px;
+        border-radius: 36px;
+        background: linear-gradient(160deg, #2a201c, #120c0a);
+        border: 2px solid #4a3830;
+        box-shadow:
+          0 24px 60px rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+
+      .phone::before {
+        content: "";
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 84px;
+        height: 22px;
+        border-radius: 999px;
+        background: #0a0706;
+        z-index: 2;
+      }
+
+      .phone-screen {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: 26px;
+        overflow: hidden;
+        background: #140e0c;
+      }
+
+      .demo-caption {
+        max-width: 22rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .side {
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      .card {
+        background: rgba(26, 18, 16, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 1.35rem 1.4rem;
+      }
+
+      .card h2 {
+        font-size: 1.05rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 0.85rem;
+      }
+
+      .card p + p,
+      .card ul {
+        margin-top: 0.75rem;
+      }
+
+      .card ul {
+        padding-left: 1.1rem;
+        color: var(--muted);
+      }
+
+      .card li + li {
+        margin-top: 0.35rem;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .stat {
+        padding: 0.75rem 0.85rem;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .stat dt {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .stat dd {
+        margin-top: 0.25rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+      }
+
+      .captures {
+        margin-top: 3rem;
+      }
+
+      .captures h2 {
+        text-align: center;
+        font-size: 1.35rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .capture-grid {
+        display: grid;
+        gap: 1.25rem;
+      }
+
+      @media (min-width: 760px) {
+        .capture-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      figure {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+      }
+
+      figcaption {
+        padding: 0.85rem 1rem;
+        font-weight: 700;
+        border-top: 1px solid var(--line);
+      }
+
+      video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 9 / 16;
+        object-fit: cover;
+        background: #140e0c;
+      }
+
+      .capture-placeholder {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 9 / 16;
+        padding: 1.5rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+        background:
+          linear-gradient(180deg, rgba(255, 209, 102, 0.04), transparent),
+          #140e0c;
+      }
+
+      .capture-placeholder code {
+        display: block;
+        margin-top: 0.75rem;
+        padding: 0.45rem 0.6rem;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.35);
+        color: var(--gold);
+        font-size: 0.82rem;
+      }
+
+      footer {
+        margin-top: 3rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Sweet Swap</h1>
+        <p>10×5 match-3 playable ad · one engine, two variants</p>
+      </header>
+
+      <section class="hero">
+        <div class="demo-panel">
+          <div class="variant-toggle" role="tablist" aria-label="Ad variant">
+            <button type="button" role="tab" data-variant="cascade" class="active" aria-selected="true">
+              Cascade Jackpot
+            </button>
+            <button type="button" role="tab" data-variant="classic" aria-selected="false">
+              Classic Swap
+            </button>
+          </div>
+
+          <div class="phone">
+            <iframe
+              id="ad"
+              class="phone-screen"
+              title="Sweet Swap playable ad"
+              src="playable.html?variant=cascade"
+              sandbox="allow-scripts allow-same-origin"
+            ></iframe>
+          </div>
+
+          <p class="demo-caption">
+            Same single-file build, different <code>Variant</code> config — striped row clears,
+            hotter combo copy, coin-rain finale on Cascade.
+          </p>
+        </div>
+
+        <div class="side">
+          <article class="card">
+            <h2>Build notes</h2>
+            <p>
+              Free-play on a seeded PRNG, not a scripted board. A headless
+              <code>verifyRun()</code> simulates a competent player at dev boot and asserts
+              every seed is completable — goal reached, never dead-ended, board settled after
+              every move.
+            </p>
+            <ul>
+              <li>Pure-data engine: matcher, board, and <code>resolve()</code> are unit-tested with zero Pixi imports</li>
+              <li>One <code>resolve()</code> pipeline replayed by the director — clone, animate, <code>applyStep</code></li>
+              <li>Single-file Vite output, zero runtime network requests, MRAID viewability + pause/resume</li>
+              <li>Variant system: Classic stars + 800 goal; Cascade stripes, 1400 goal, JACKPOT + coin rain</li>
+              <li>Procedural PIXI.Graphics candies — no image assets, colourblind-safe shape + colour pairs</li>
+            </ul>
+
+            <dl class="stats" id="stats">
+              <div class="stat">
+                <dt>Gzip size</dt>
+                <dd id="stat-gzip">—</dd>
+              </div>
+              <div class="stat">
+                <dt>Raw size</dt>
+                <dd id="stat-raw">—</dd>
+              </div>
+              <div class="stat">
+                <dt>Budget used</dt>
+                <dd id="stat-budget">—</dd>
+              </div>
+              <div class="stat">
+                <dt>Built</dt>
+                <dd id="stat-date">—</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="card">
+            <h2>Variant specs</h2>
+            <ul>
+              <li><strong>Classic</strong> — seed 18, 800 pts / 3-move floor, star burst, opening hint arrow</li>
+              <li><strong>Cascade</strong> — seed 183, 1400 pts / 4-move floor, 4-match striped leftovers, row clears</li>
+            </ul>
+            <p style="margin-top: 0.75rem; color: var(--muted); font-size: 0.92rem">
+              Toggle above reloads the iframe with <code>?variant=</code> — no second build, no engine fork.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="captures">
+        <h2>15s captures</h2>
+        <div class="capture-grid">
+          <figure>
+            <div class="capture-slot" data-src="cascade.webm" data-label="Cascade Jackpot">
+              <div class="capture-placeholder">
+                Cascade reel placeholder
+                <code>npm run capture</code>
+              </div>
+            </div>
+            <figcaption>Cascade Jackpot — reel opener</figcaption>
+          </figure>
+          <figure>
+            <div class="capture-slot" data-src="classic.webm" data-label="Classic Swap">
+              <div class="capture-placeholder">
+                Classic reel placeholder
+                <code>npm run capture</code>
+              </div>
+            </div>
+            <figcaption>Classic Swap</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <footer>Serve this folder after <code>npm run portfolio</code> — e.g. <code>npx serve portfolio</code></footer>
+    </div>
+
+    <script>
+      const iframe = document.getElementById('ad');
+      const buttons = [...document.querySelectorAll('.variant-toggle button')];
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const variant = button.dataset.variant;
+          buttons.forEach((peer) => {
+            const active = peer === button;
+            peer.classList.toggle('active', active);
+            peer.setAttribute('aria-selected', String(active));
+          });
+          iframe.src = `playable.html?variant=${variant}`;
+        });
+      });
+
+      async function loadStats() {
+        try {
+          const res = await fetch('build-stats.json', { cache: 'no-store' });
+          if (!res.ok) return;
+          const stats = await res.json();
+          const budgetKb = 2.5 * 1024;
+          const pct = ((stats.gzipBytes / (budgetKb * 1024)) * 100).toFixed(1);
+
+          document.getElementById('stat-gzip').textContent = `${stats.gzipKb} KB`;
+          document.getElementById('stat-raw').textContent = `${stats.rawKb} KB`;
+          document.getElementById('stat-budget').textContent = `${pct}% of 2.5 MB`;
+          document.getElementById('stat-date').textContent = new Date(stats.generatedAt).toLocaleDateString();
+        } catch {
+          /* build-stats.json appears after npm run portfolio */
+        }
+      }
+
+      function wireCaptures() {
+        document.querySelectorAll('.capture-slot').forEach((slot) => {
+          const src = slot.dataset.src;
+          const video = document.createElement('video');
+          video.src = src;
+          video.controls = true;
+          video.playsInline = true;
+          video.loop = true;
+          video.muted = true;
+          video.addEventListener(
+            'loadeddata',
+            () => {
+              slot.replaceChildren(video);
+            },
+            { once: true },
+          );
+          video.addEventListener(
+            'error',
+            () => {
+              /* keep placeholder until npm run capture produces the file */
+            },
+            { once: true },
+          );
+          video.load();
+        });
+      }
+
+      loadStats();
+      wireCaptures();
+    </script>
+  </body>
+</html>

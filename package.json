@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "size": "npm run build && node scripts/size.mjs",
+    "portfolio": "npm run build && node scripts/build-portfolio.mjs",
+    "capture": "node scripts/capture-demos.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -40,6 +40,11 @@ const stats = {
 };
 
 fs.writeFileSync(statsJson, JSON.stringify(stats, null, 2) + '\n');
+// Classic script so file:// previews can show stats (fetch of JSON is blocked there).
+fs.writeFileSync(
+  path.join(portfolioDir, 'build-stats.js'),
+  `window.BUILD_STATS = ${JSON.stringify(stats)};\n`,
+);
 
 console.log('Portfolio bundle updated:');
 console.log('  index.html     ->', indexHtml);

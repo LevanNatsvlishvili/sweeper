@@ -397,6 +397,7 @@
       <footer>Serve this folder after <code>npm run portfolio</code> — e.g. <code>npx serve portfolio</code></footer>
     </div>
 
+    <script src="build-stats.js"></script>
     <script>
       const iframe = document.getElementById('ad');
       const buttons = [...document.querySelectorAll('.variant-toggle button')];
@@ -413,20 +414,26 @@
         });
       });
 
+      function applyStats(stats) {
+        if (!stats) return;
+        const pct = stats.budgetPct ?? ((stats.gzipBytes / (2.5 * 1024 * 1024)) * 100).toFixed(1);
+        document.getElementById('stat-gzip').textContent = `${stats.gzipKb} KB`;
+        document.getElementById('stat-raw').textContent = `${stats.rawKb} KB`;
+        document.getElementById('stat-budget').textContent = `${pct}% of 2.5 MB`;
+        document.getElementById('stat-date').textContent = new Date(stats.generatedAt).toLocaleDateString();
+      }
+
       async function loadStats() {
+        if (window.BUILD_STATS) {
+          applyStats(window.BUILD_STATS);
+          return;
+        }
         try {
           const res = await fetch('build-stats.json', { cache: 'no-store' });
           if (!res.ok) return;
-          const stats = await res.json();
-          const budgetKb = 2.5 * 1024;
-          const pct = ((stats.gzipBytes / (budgetKb * 1024)) * 100).toFixed(1);
-
-          document.getElementById('stat-gzip').textContent = `${stats.gzipKb} KB`;
-          document.getElementById('stat-raw').textContent = `${stats.rawKb} KB`;
-          document.getElementById('stat-budget').textContent = `${pct}% of 2.5 MB`;
-          document.getElementById('stat-date').textContent = new Date(stats.generatedAt).toLocaleDateString();
+          applyStats(await res.json());
         } catch {
-          /* build-stats.json appears after npm run portfolio */
+          /* appears after npm run portfolio */
         }
       }
 

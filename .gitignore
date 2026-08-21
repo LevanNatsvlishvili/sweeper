@@ -12,6 +12,7 @@ dist
 dist-ssr
 portfolio/playable.html
 portfolio/build-stats.json
+portfolio/build-stats.js
 portfolio/cascade.webm
 portfolio/classic.webm
 portfolio/.capture-tmp
